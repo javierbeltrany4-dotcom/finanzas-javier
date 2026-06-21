@@ -1,0 +1,14 @@
+{
+  "apiUrl": "https://script.google.com/macros/s/AKfycbxHvRX6kAQiLZy8BRk4_AgAy_1ouef-JodyZ6YhOB9A8WlAnxjs8sTF19qdp-pIjpMA/exec",
+  "anioBase": 2026,
+  "config": {
+    "split": { "yo": 0.40, "david": 0.60 },
+    "metaMensual": 0,
+    "gastosFijos": [
+      { "nombre": "Gimnasio", "importe": 27, "diaPago": 1 },
+      { "nombre": "Asesoría", "importe": 75, "diaPago": 1 },
+      { "nombre": "Cuota autónomo", "importe": 80, "diaPago": 1 }
+    ]
+  },
+  "saldoBanco": { "importe": 0, "fechaActualizacion": "2026-06-21" }
+}

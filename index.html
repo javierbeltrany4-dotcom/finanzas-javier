@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Mis Finanzas</title>
+  <meta name="theme-color" content="#0c0c0e" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="icon" href="icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Mis Finanzas" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>Mis Finanzas</h1>
+      <span id="estado" class="estado">Conectando</span>
+    </div>
+    <div class="topbar-actions">
+      <button id="btn-editar" class="btn btn-ghost">Editar datos</button>
+      <button id="btn-actualizar" class="btn btn-primary">Actualizar</button>
+    </div>
+  </header>
+
+  <nav class="tabs-wrap">
+    <div class="tabs" role="tablist">
+      <button class="tab activa" data-vista="resumen">Resumen</button>
+      <button class="tab" data-vista="historico">Histórico</button>
+      <button class="tab" data-vista="retiros">Retiros</button>
+      <button class="tab" data-vista="midinero">Mi dinero</button>
+      <button class="tab" data-vista="calendario">Calendario</button>
+    </div>
+  </nav>
+
+  <main>
+    <!-- RESUMEN -->
+    <section class="vista activa" id="v-resumen">
+      <div class="hero">
+        <div class="hero-label">Puedo retirar hoy · cash real (mi 40%)</div>
+        <div class="hero-value num" id="hero-disponible">—</div>
+        <div class="hero-help" id="hero-help">—</div>
+        <div class="hero-sub">
+          <div><span class="l">Incl. pendiente de cobro</span><span class="v num" id="hero-contable">—</span><span class="mc">cobro no garantizado</span></div>
+          <div><span class="l">Cash disponible (negocio)</span><span class="v num" id="hero-cash">—</span><span class="mc">dinero seguro en caja</span></div>
+          <div><span class="l">Pendiente de cobro</span><span class="v num" id="hero-cobro">—</span><span class="mc">aún sin cobrar</span></div>
+          <div><span class="l">Le queda a David (60%)</span><span class="v num" id="hero-david">—</span><span class="mc">su parte del pendiente</span></div>
+        </div>
+        <div class="hero-spark" id="hero-spark"></div>
+      </div>
+
+      <div class="bloque" id="objetivo-wrap" style="display:none">
+        <div class="bloque-title">Objetivo del mes</div>
+        <div id="objetivo-resumen"></div>
+      </div>
+
+      <div class="bloque" id="insights-wrap">
+        <div class="bloque-title">Insights</div>
+        <div class="grid grid-3" id="insights-resumen"></div>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">Mi mes actual</div>
+        <div class="grid grid-4" id="mes-actual"></div>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">El negocio ahora</div>
+        <div class="grid grid-3" id="negocio-resumen"></div>
+      </div>
+    </section>
+
+    <!-- HISTÓRICO -->
+    <section class="vista" id="v-historico">
+      <div class="bloque">
+        <div class="bloque-title">Beneficio del negocio por mes</div>
+        <div class="chart-wrap"><canvas id="chart-ingresos"></canvas></div>
+        <div class="tabla-wrap" id="tabla-historico"></div>
+      </div>
+    </section>
+
+    <!-- RETIROS -->
+    <section class="vista" id="v-retiros">
+      <div class="bloque">
+        <div class="bloque-title">Lo mío para retirar</div>
+        <div class="grid grid-3" id="mio-retirar"></div>
+      </div>
+      <div class="bloque">
+        <div class="bloque-title">En el negocio ahora</div>
+        <div class="grid grid-3" id="caja-ahora"></div>
+      </div>
+      <div class="bloque">
+        <div class="bloque-title">Histórico de caja</div>
+        <div class="grid grid-3" id="caja-historico"></div>
+      </div>
+      <div class="bloque">
+        <div class="bloque-title">Historial de retiros · se actualiza solo desde Tradingverso</div>
+        <div class="filtros">
+          <span class="mc">Ver:</span>
+          <select id="filtro-retiros">
+            <option value="todos">Todos</option>
+            <option value="yo">Mi parte (40%)</option>
+            <option value="david">Parte de David (60%)</option>
+          </select>
+        </div>
+        <div class="tabla-wrap" id="tabla-retiros"></div>
+      </div>
+    </section>
+
+    <!-- MI DINERO -->
+    <section class="vista" id="v-midinero">
+      <div id="aviso-midinero"></div>
+      <div class="bloque">
+        <div class="bloque-title">Mi mes — <span id="md-mes-nombre"></span></div>
+        <div class="grid grid-4" id="midinero-cards"></div>
+      </div>
+      <div class="bloque">
+        <div class="bloque-title">Mis gastos fijos</div>
+        <div class="grid grid-4" id="lista-gastos"></div>
+        <p class="mc" style="margin-top:10px">Edita o añade gastos con el botón "Editar datos" de arriba.</p>
+      </div>
+      <div class="bloque">
+        <div class="bloque-title">Saldo bancario</div>
+        <div id="alerta-saldo"></div>
+        <div class="grid grid-3" id="saldo-detalle"></div>
+      </div>
+      <div class="bloque">
+        <div class="bloque-title">Mis acumulados</div>
+        <div class="grid grid-3" id="midinero-acum"></div>
+      </div>
+      <div class="bloque">
+        <div class="bloque-title">Mi histórico personal</div>
+        <div class="tabla-wrap" id="midinero-tabla"></div>
+      </div>
+    </section>
+
+    <!-- CALENDARIO -->
+    <section class="vista" id="v-calendario">
+      <div class="bloque">
+        <div class="filtros">
+          <input type="month" id="cal-mes" />
+          <div class="seg" id="cal-modo">
+            <button data-modo="mes" class="on">Mes</button>
+            <button data-modo="semana">Semana</button>
+            <button data-modo="dia">Día</button>
+          </div>
+          <input type="date" id="cal-fecha" style="display:none" />
+        </div>
+        <div class="grid grid-3" id="cal-proyeccion"></div>
+        <div class="grid grid-4" id="cal-totales"></div>
+        <div class="heat-leyenda" id="heat-leyenda"></div>
+        <p class="mc" style="margin:4px 0 16px">Haz clic en cualquier día para ver el detalle (quién compró, qué se gastó, retiros).</p>
+        <div class="cal-cab" id="cal-cab"></div>
+        <div class="cal-grid" id="cal-grid"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal editar datos -->
+  <div id="modal" class="modal oculto">
+    <div class="modal-box">
+      <button id="modal-cerrar" class="modal-cerrar">&times;</button>
+      <h3>Editar mis datos</h3>
+      <p class="sub">Ingresos y retiros se leen solos de Tradingverso. Aquí van solo tus datos personales.</p>
+
+      <label>Saldo actual de tu cuenta bancaria (€)</label>
+      <input type="number" step="0.01" id="g-saldo" />
+
+      <label>Objetivo de beneficio mensual (€) · 0 = sin objetivo</label>
+      <input type="number" step="0.01" id="g-meta" />
+
+      <label>Mis gastos fijos mensuales</label>
+      <div id="g-gastos"></div>
+      <button class="btn btn-ghost" id="g-add-gasto" style="margin-top:8px">+ Añadir gasto</button>
+
+      <div class="form-actions">
+        <button class="btn btn-primary" id="g-guardar">Guardar</button>
+        <button class="btn btn-ghost" id="g-exportar">Exportar datos.json</button>
+      </div>
+      <p class="nota">Se guarda en este navegador. Para que los gastos viajen a GitHub, pulsa "Exportar datos.json" y sube el archivo al repo.</p>
+    </div>
+  </div>
+
+  <!-- Modal detalle del día -->
+  <div id="modal-dia" class="modal oculto">
+    <div class="modal-box">
+      <button id="modal-dia-cerrar" class="modal-cerrar">&times;</button>
+      <div id="modal-dia-contenido"></div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
