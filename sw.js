@@ -1,5 +1,5 @@
 // Service worker — app shell offline + datos network-first.
-const CACHE = 'mis-finanzas-v3';
+const CACHE = 'mis-finanzas-v4';
 const SHELL = [
   './', './index.html', './style.css', './app.js', './calculos.js', './tradinverso.js',
   './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png',

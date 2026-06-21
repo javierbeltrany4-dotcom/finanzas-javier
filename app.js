@@ -85,25 +85,76 @@ function horaAhora() {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
 }
+let ultimaActualizacion = null;
+let desdeCache = false;
+
+function haceCuanto(iso) {
+  if (!iso) return 'desconocido';
+  const min = Math.floor((Date.now() - Date.parse(iso)) / 60000);
+  if (min < 1) return 'hace un momento';
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `hace ${h} h`;
+  const d = Math.floor(h / 24);
+  return `hace ${d} día${d > 1 ? 's' : ''}`;
+}
+function fechaCorta(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 async function cargarNegocio() {
   const est = document.getElementById('estado');
   est.textContent = 'Actualizando…'; est.className = 'estado';
   try {
     const raw = await cargarTradinverso(config.apiUrl);
     datos = parseTradinverso(raw, config.anioBase);
-    localStorage.setItem(CACHE_KEY, JSON.stringify(datos));
+    ultimaActualizacion = new Date().toISOString();
+    desdeCache = false;
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: ultimaActualizacion, datos }));
     est.textContent = `En vivo · ${horaAhora()}`; est.className = 'estado online';
   } catch (e) {
     const cache = localStorage.getItem(CACHE_KEY);
-    if (cache) { datos = JSON.parse(cache); est.textContent = `Desde caché · ${horaAhora()}`; est.className = 'estado cache'; }
-    else { datos = { ingresos: [], retiros: [], ventas: [], gastosNegocio: [], caja: {} }; est.textContent = 'Sin conexión'; est.className = 'estado error'; }
+    if (cache) {
+      const c = JSON.parse(cache);
+      datos = c.datos || c;
+      ultimaActualizacion = c.ts || null;
+      desdeCache = true;
+      est.textContent = 'Desde caché'; est.className = 'estado cache';
+    } else {
+      datos = { ingresos: [], retiros: [], ventas: [], gastosNegocio: [], caja: {} };
+      ultimaActualizacion = null; desdeCache = true;
+      est.textContent = 'Sin conexión'; est.className = 'estado error';
+    }
   }
 }
 
 // ---------- RESUMEN ----------
 function setNum(id, val) { const el = document.getElementById(id); if (el) { el.dataset.count = val; el.textContent = f(0); } }
 
+const CK = '<svg class="vic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+const CX = '<svg class="vic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+
+function renderVerificacion() {
+  const cont = document.getElementById('verificacion');
+  if (!cont) return;
+  const r = C.verificarDatos(datos, split());
+  let stale = '';
+  if (desdeCache) {
+    stale = `<div class="alerta">${ICON_WARN}<span><strong>Sin conexión con Tradingverso.</strong> Mostrando datos guardados (${fechaCorta(ultimaActualizacion)}); pueden no estar al día. Pulsa <strong>Actualizar</strong>.</span></div>`;
+  }
+  const badge = r.ok
+    ? `<div class="trust ok">${ICON_OK}<div><strong>Datos verificados</strong><span>Las cifras cuadran con Tradingverso · ${desdeCache ? 'guardado ' + fechaCorta(ultimaActualizacion) : 'en vivo, ' + haceCuanto(ultimaActualizacion)}</span></div></div>`
+    : `<div class="trust bad">${ICON_WARN}<div><strong>Cuidado: hay datos que no cuadran</strong><span>No te fíes hasta revisarlo (detalle abajo).</span></div></div>`;
+  const checks = r.checks.map((c) =>
+    `<div class="vcheck ${c.ok ? 'ok' : 'bad'}">${c.ok ? CK : CX}<span>${c.nombre}${c.detalle ? ` — <em>${c.detalle}</em>` : ''}</span></div>`
+  ).join('');
+  cont.innerHTML = stale + badge + `<div class="vchecks">${checks}</div>`;
+}
+
 function renderResumen() {
+  renderVerificacion();
   const { ingresos, retiros, caja } = datos;
   const sp = split();
   setNum('hero-disponible', C.disponibleRealParaMi(caja, sp));
@@ -572,6 +623,10 @@ function bind() {
     try { await cargarNegocio(); renderVista(vistaActiva); }
     catch (err) { console.error('Error al actualizar', err); }
     finally { btn.disabled = false; }
+  });
+  // Auto-actualizar al volver a la app (móvil/escritorio)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) cargarNegocio().then(() => renderVista(vistaActiva)).catch(() => {});
   });
   document.getElementById('btn-editar').addEventListener('click', abrirModal);
   document.getElementById('modal-cerrar').addEventListener('click', cerrarModal);

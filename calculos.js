@@ -116,6 +116,36 @@ export function mejorDiaVentas(ventas, desde, hasta, split = SPLIT) {
   return mejor;
 }
 
+// Capa de verificación: recalcula cifras por caminos independientes y comprueba que cuadran.
+// Devuelve { ok, checks:[{nombre, ok, detalle}] }. Si algo falla, la UI avisa en vez de mostrar datos mal.
+export function verificarDatos(d, split = SPLIT) {
+  const ing = d.ingresos || [], ret = d.retiros || [], ven = d.ventas || [], gas = d.gastosNegocio || [], caja = d.caja || {};
+  const checks = [];
+  const add = (nombre, ok, detalle = '') => checks.push({ nombre, ok, detalle });
+
+  // 1. Llegaron datos del origen
+  add('Datos recibidos de Tradingverso', ing.length > 0 && (caja.disponible || 0) > 0,
+    ing.length === 0 ? 'No llegaron ingresos' : (!(caja.disponible > 0) ? 'No llegó la caja' : ''));
+
+  // 2. El detalle diario (ventas − gastos por fecha) cuadra con el beneficio del resumen, mes a mes
+  let recOk = true, meses = [];
+  ing.forEach((i) => {
+    const a = `${i.mes}-01`;
+    const b = `${i.mes}-${String(new Date(+i.mes.slice(0, 4), +i.mes.slice(5, 7), 0).getDate()).padStart(2, '0')}`;
+    const detalle = ventasNetasEntre(ven, a, b) - gastosEntre(gas, a, b);
+    if (Math.abs(detalle - i.beneficio) > 1) { recOk = false; meses.push(i.mes); }
+  });
+  add('El detalle diario cuadra con el resumen', recOk, recOk ? '' : `Desfase en: ${meses.join(', ')}`);
+
+  // 3. La caja cuadra: pendiente de retirar == cash disponible + pendiente de cobro
+  const pend = beneficioAcumulado(ing) - totalRetirado(ret);
+  const cajaSuma = (caja.disponible || 0) + (caja.pendienteCobro || 0);
+  add('La caja cuadra (disponible + por cobrar)', Math.abs(pend - cajaSuma) <= 1,
+    Math.abs(pend - cajaSuma) <= 1 ? '' : `pendiente ${pend.toFixed(2)} ≠ caja ${cajaSuma.toFixed(2)}`);
+
+  return { ok: checks.every((c) => c.ok), checks };
+}
+
 // Días transcurridos desde la última venta hasta `hoyISO` (racha sin ventas). 0 si hubo venta hoy.
 export function diasDesdeUltimaVenta(ventas, hoyISO) {
   if (!ventas.length) return null;

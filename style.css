@@ -162,6 +162,25 @@ main { max-width: 1120px; margin: 0 auto; padding: 24px 28px 80px; }
 .insight.warn .ic { color: var(--amber); }
 .insight strong { color: var(--text); }
 
+/* Sello de verificación */
+#verificacion { margin-bottom: 18px; }
+.trust { display: flex; align-items: center; gap: 14px; border: 1px solid var(--border); border-radius: 16px; padding: 16px 18px; }
+.trust svg { width: 26px; height: 26px; flex-shrink: 0; }
+.trust div { display: flex; flex-direction: column; gap: 2px; }
+.trust strong { font-size: 14px; }
+.trust span { font-size: 12px; color: var(--muted); }
+.trust.ok { border-color: rgba(0,200,150,.4); background: var(--green-dim); }
+.trust.ok svg { color: var(--green); }
+.trust.bad { border-color: var(--red); background: var(--red-dim); }
+.trust.bad svg { color: var(--red); }
+.vchecks { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; padding-left: 4px; }
+.vcheck { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.vcheck .vic { width: 14px; height: 14px; flex-shrink: 0; }
+.vcheck.ok .vic { color: var(--green); }
+.vcheck.bad { color: var(--red); }
+.vcheck.bad .vic { color: var(--red); }
+.vcheck em { color: var(--amber); font-style: normal; }
+
 /* Heatmap leyenda */
 .heat-leyenda { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); margin: 12px 0 4px; }
 .heat-leyenda .box { width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--border); }
