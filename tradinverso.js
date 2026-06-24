@@ -118,7 +118,8 @@ export function parseTradinverso(data, anioBase) {
 }
 
 // Carga el endpoint vía JSONP (esquiva CORS). Solo navegador.
-export function cargarTradinverso(apiUrl, timeoutMs = 12000) {
+// timeout amplio: el Apps Script tarda 7-10s de base (más en frío / red móvil).
+export function cargarTradinverso(apiUrl, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     const cbName = '__tvcb_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
     const script = document.createElement('script');

@@ -106,15 +106,20 @@ function fechaCorta(iso) {
 
 async function cargarNegocio() {
   const est = document.getElementById('estado');
-  est.textContent = 'Actualizando…'; est.className = 'estado';
-  try {
-    const raw = await cargarTradinverso(config.apiUrl);
+  est.textContent = 'Conectando… (puede tardar unos segundos)'; est.className = 'estado';
+  // Intenta en vivo y reintenta 1 vez: el 1er intento "calienta" el Apps Script (frío = lento).
+  let raw = null;
+  for (let intento = 1; intento <= 2; intento++) {
+    try { raw = await cargarTradinverso(config.apiUrl); break; }
+    catch (e) { if (intento === 1) { est.textContent = 'Reintentando…'; } }
+  }
+  if (raw) {
     datos = parseTradinverso(raw, config.anioBase);
     ultimaActualizacion = new Date().toISOString();
     desdeCache = false;
     localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: ultimaActualizacion, datos }));
     est.textContent = `En vivo · ${horaAhora()}`; est.className = 'estado online';
-  } catch (e) {
+  } else {
     const cache = localStorage.getItem(CACHE_KEY);
     if (cache) {
       const c = JSON.parse(cache);
