@@ -767,7 +767,8 @@ Con el coste recurrente en el extremo alto (10.970 EUR) el cruce se va a ~37.000
 ### 7.3. Cuándo compensa Paraguay
 
 - **Sobre España: desde 15.000 EUR ya sale mejor sobre el papel** (13.000 vs 10.806).
-- **Sobre Dubái: Paraguay gana hasta ~140.000–150.000 EUR de beneficio.** A partir de ahí Dubái gana, pero por muy poco (a 150.000: Dubái 134.590–136.090 vs Paraguay ~134.500).
+- **Sobre Dubái: con el coste medio de estructura (9.720 EUR/año, el punto medio que usa esta misma sección en 7.1) el cruce está en 116.050 EUR de beneficio.** Con la horquilla completa se mueve entre 79.700 (estructura 8.470) y 241.050 (estructura 10.970). Por debajo del cruce gana Paraguay; por encima, Dubái. A 150.000: Dubái 133.590–136.090 vs Paraguay 134.500, o sea que **quién gana depende de dónde caiga tu coste de estructura**, no de una frontera limpia.
+  - *Corrección (28/07/2026).* Esta viñeta decía «Paraguay gana hasta ~140.000–150.000 EUR» y «Dubái 134.590–136.090». Las dos cifras eran falsas y se contradecían con el resto del propio informe. El cruce sale de resolver, con los supuestos 4 y 5 de la sección 6: `b − 0,09·(b − 89.550) − c = 0,9b − 500`, es decir `b = 100·(c − 8.559,50)` en el tramo del 9 %. Con c = 9.720 da **116.050** exacto, no 140.000–150.000; ninguno de los tres costes canónicos (8.470 / 9.720 / 10.970) cae en esa horquilla. Y el extremo bajo de Dubái a 150.000 es `150.000 − 5.440,50 − 10.970 = 133.589,50` → **133.590**, que es lo que ya decía bien la tabla maestra de la sección 6: el «134.590» de aquí era una errata.
 - **Pero Paraguay tiene dos frenos que no son de dinero:**
   1. **Stripe no opera allí.** `OFICIAL` — https://stripe.com/global
   2. La residencia fiscal paraguaya no tiene norma que la defina para personas físicas: es la más barata de obtener **y la más fácil de tumbar** por la AEAT.

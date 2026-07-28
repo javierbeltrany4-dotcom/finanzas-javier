@@ -31,9 +31,13 @@ const SHARE_PALANCA = 50;
 
 // Número de usuario o de la hoja: vacío, null o basura -> el valor por defecto.
 // Ojo: el 0 es un valor legítimo (ticket 0, fijos 0) y tiene que sobrevivir.
+// El try no es paranoia: `Number(v)` LANZA un TypeError si v es un objeto con una clave
+// `toString` que no sea función, y eso llega desde una copia de seguridad importada
+// ({"ticket": {"toString": 1}} es JSON válido). Ver la nota larga en respaldo.js.
 function num(v, porDefecto) {
   if (v === null || v === undefined || v === '') return porDefecto;
-  const n = typeof v === 'number' ? v : Number(v);
+  let n;
+  try { n = typeof v === 'number' ? v : Number(v); } catch (e) { return porDefecto; }
   return Number.isFinite(n) ? n : porDefecto;
 }
 
@@ -502,6 +506,30 @@ export function ventasParaLimpiarReal(m, objetivoBolsillo, tramos = TRAMOS_IRPF,
     facturacionMes,
     facturacionAnio: facturacionMes * 12,
   };
+}
+
+// El camino inverso al que necesita la pestaña "Dónde vivir": "para tener X euros de
+// beneficio ANUAL mío, ¿cuántas ventas al mes hacen falta?".
+//
+// `beneficioAnual` es exactamente la magnitud que compara residencia.js (supuesto 1 de la
+// sección 6 del informe): mi parte del beneficio del negocio, ANTES de cuota de autónomo e
+// impuestos y después de los gastos del negocio. Es decir, resultadoMensual().miParte × 12.
+//
+// Se invierte con dos evaluaciones del propio modelo en vez de reescribir aquí la fórmula:
+// miParte es lineal en las ventas ((V·P − F)·S), así que dos puntos la determinan, y si
+// algún día cambia la cadena de cálculo esto sigue siendo correcto solo.
+//
+// null cuando una venta más no mueve el beneficio (ticket 0, comisión del 100 %, mi parte
+// al 0 %): ahí no hay ventas que pedir, y devolver un número sería mentir.
+export function ventasParaBeneficioAnual(m, beneficioAnual) {
+  const x = normalizarModelo(m);
+  const objetivo = num(beneficioAnual, 0);
+  const enCero = resultadoMensual(x, 0).miParte * 12;
+  const enUna = resultadoMensual(x, 1).miParte * 12;
+  const pendiente = enUna - enCero;
+  if (!(pendiente > 0)) return null;
+  const ventas = (objetivo - enCero) / pendiente;
+  return Number.isFinite(ventas) ? Math.max(0, ventas) : null;
 }
 
 // En qué tramo de la escala cae una base anual (0..5). Base negativa o nula: tramo 0.

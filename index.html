@@ -31,19 +31,56 @@
 
   <nav class="tabs-wrap">
     <div class="tabs" role="tablist">
-      <button class="tab activa" data-vista="resumen">Resumen</button>
+      <!-- "Y ahora qué" va primera y es la que abre por defecto: es la pantalla que
+           responde dónde estoy, qué viene y qué hago hoy. Resumen se queda la segunda. -->
+      <button class="tab activa" data-vista="decisiones">Y ahora qué</button>
+      <button class="tab" data-vista="resumen">Resumen</button>
       <button class="tab" data-vista="historico">Histórico</button>
       <button class="tab" data-vista="retiros">Retiros</button>
       <button class="tab" data-vista="midinero">Mi dinero</button>
       <button class="tab" data-vista="calendario">Calendario</button>
       <button class="tab" data-vista="patrimonio">Mi patrimonio</button>
       <button class="tab" data-vista="objetivo">Cuánto facturar</button>
+      <button class="tab" data-vista="residencia">Dónde vivir</button>
     </div>
   </nav>
 
   <main>
+    <!-- Y AHORA QUÉ -->
+    <!-- El orden de los bloques NO es decorativo, es la respuesta a las tres preguntas:
+         dónde estoy (semáforo + alertas), qué hago hoy, y qué viene después (el siguiente
+         hito, el camino entero y los países). Lo primero que se ve es la frase honesta. -->
+    <section class="vista activa" id="v-decisiones">
+      <div id="dec-semaforo"></div>
+
+      <div class="bloque">
+        <div class="bloque-title">Qué hago hoy</div>
+        <div id="dec-hoy"></div>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">Dónde estás ahora mismo</div>
+        <div id="dec-alertas"></div>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">Lo siguiente</div>
+        <div id="dec-siguiente"></div>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">El camino entero</div>
+        <div id="dec-camino"></div>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">Dónde te sale mejor vivir, hoy</div>
+        <div id="dec-paises"></div>
+      </div>
+    </section>
+
     <!-- RESUMEN -->
-    <section class="vista activa" id="v-resumen">
+    <section class="vista" id="v-resumen">
       <div id="verificacion"></div>
       <div class="hero">
         <div class="hero-label">Puedo retirar hoy · cash real (mi 40%)</div>
@@ -211,6 +248,33 @@
       <div class="bloque"><div class="bloque-title">Ajustes — solo si algo cambia</div>
         <div id="obj-ajustes"></div></div>
     </section>
+
+    <!-- DÓNDE VIVIR -->
+    <!-- El aviso va en el HTML, no en la vista: tiene que estar SIEMPRE, incluso si el
+         render falla o los datos no llegan. Es la letra pequeña que sostiene la pantalla. -->
+    <section class="vista" id="v-residencia">
+      <div class="aviso-ambar" id="res-aviso">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span>Cifras de dos investigaciones con sus fuentes citadas (docs/investigacion-fiscal-2026.md
+          para España, Dubái y Paraguay; docs/bali-indonesia-2026.md para Bali).
+          Sirven para decidir dirección, no para presentar ante Hacienda. Los umbrales no incluyen
+          el coste de vivir en cada sitio, que puede cambiarlo todo. Y en Bali manda un umbral que
+          no es fiscal: sin acreditar 60.000 USD al año no hay visado. Valídalo con un fiscalista
+          antes de mover nada.</span>
+      </div>
+      <div class="bloque"><div class="bloque-title">Tu beneficio anual</div>
+        <div id="res-mio"></div></div>
+      <div class="bloque"><div class="bloque-title">Dónde te queda más</div>
+        <div id="res-ranking"></div></div>
+      <div class="bloque"><div class="bloque-title">De dónde sale cada euro</div>
+        <div id="res-detalle"></div></div>
+      <div class="bloque"><div class="bloque-title">Cuándo cambia la respuesta</div>
+        <div id="res-umbrales"></div></div>
+      <div class="bloque"><div class="bloque-title">Los cinco escenarios, a distintos beneficios</div>
+        <div class="tabla-wrap" id="res-tabla"></div></div>
+      <div class="bloque"><div class="bloque-title">Ajustes — cada cifra con su fuente</div>
+        <div id="res-ajustes"></div></div>
+    </section>
   </main>
 
   <!-- Modal editar datos -->
@@ -219,6 +283,10 @@
       <button id="modal-cerrar" class="modal-cerrar">&times;</button>
       <h3>Editar mis datos</h3>
       <p class="sub">Ingresos y retiros se leen solos de Tradingverso. Aquí van solo tus datos personales.</p>
+
+      <!-- Aviso rojo permanente: solo aparece si NUNCA ha hecho copia y no tiene sync.
+           Lo llena abrirModal(); vacío no ocupa nada. -->
+      <div id="g-copia-aviso"></div>
 
       <label>Saldo actual de tu cuenta bancaria (€)</label>
       <input type="number" step="0.01" id="g-saldo" />
@@ -244,6 +312,40 @@
         <button class="btn btn-ghost" id="g-exportar">Exportar datos.json</button>
       </div>
       <p class="nota">Se guarda en este navegador. Para que los gastos viajen a GitHub, pulsa "Exportar datos.json" y sube el archivo al repo.</p>
+
+      <!-- ============================================================
+           DÓNDE VIVEN TUS DATOS
+           La copia en archivo y la sincronización con tu hoja de Google.
+           ============================================================ -->
+      <div class="g-seccion" id="g-guardado">
+        <div class="g-seccion-tit">Dónde viven tus datos</div>
+
+        <div id="g-estado-datos"></div>
+
+        <div class="g-botones">
+          <button class="btn btn-primary" id="g-guardar-copia">Guardar copia</button>
+          <button class="btn btn-ghost" id="g-cargar-copia">Cargar copia</button>
+          <input type="file" id="g-cargar-copia-input" accept="application/json,.json" hidden />
+        </div>
+        <div id="g-copia-msg"></div>
+
+        <div class="g-sub">Sincronizar con tu hoja de Google</div>
+
+        <label for="g-sync-url">Dirección de tu aplicación web (acaba en /exec)</label>
+        <input type="url" id="g-sync-url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" />
+
+        <label for="g-sync-clave">Clave secreta</label>
+        <input type="password" id="g-sync-clave" placeholder="la misma que pusiste en el script" autocomplete="off" />
+        <p class="nota g-nota-clave">La clave vive solo en este navegador. No se sube al repositorio ni sale en "Exportar datos.json": esa dirección es pública y la clave es lo único que protege tus datos.</p>
+
+        <div class="g-botones">
+          <button class="btn btn-ghost" id="g-sync-probar">Probar conexión</button>
+          <button class="btn btn-primary" id="g-sync-ahora">Sincronizar ahora</button>
+        </div>
+        <div id="g-sync-msg"></div>
+
+        <p class="nota"><a href="docs/COMO-CONFIGURAR-SYNC.md" target="_blank" rel="noopener">Cómo montar todo esto, paso a paso (15 minutos, una sola vez)</a></p>
+      </div>
     </div>
   </div>
 

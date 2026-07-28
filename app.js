@@ -7,6 +7,11 @@ import * as O from './objetivo.js';
 // beneficio del mes, en el Resumen). Dos declaraciones con el mismo nombre romperían
 // el módulo entero, así que la vista de "Cuánto facturar" entra con otro nombre.
 import { renderObjetivo as renderVistaObjetivo, bindObjetivo } from './vista-objetivo.js';
+import * as R from './residencia.js';
+import { renderResidencia, bindResidencia } from './vista-residencia.js';
+import { renderDecisiones, bindDecisiones } from './vista-decisiones.js';
+import * as RESP from './respaldo.js';
+import * as SYNC from './sync.js';
 
 const CACHE_KEY = 'tv-cache-v2';
 const SALDO_KEY = 'saldo-banco-v2';
@@ -17,10 +22,25 @@ const IRPF_KEY = 'irpf-v1';
 const MODELO_KEY = 'modelo-objetivo-v1';
 const DUBAI_KEY = 'dubai-v1';
 const OBJETIVO_KEY = 'objetivo-limpio-v1';
+// Ajustes de la pestaña "Dónde vivir" (comunidad, costes, sueldo de administrador).
+const RESIDENCIA_KEY = 'residencia-v1';
+// Credenciales de la sincronización: { url, clave }. SOLO en este dispositivo.
+// La clave es un secreto: no viaja en "Exportar datos.json" ni en la copia de seguridad.
+const SYNC_KEY = 'sync-v1';
+// Fecha ISO de la última copia en archivo que se descargó.
+const COPIA_KEY = 'ultima-copia-v1';
+// Cuándo cambió un dato del usuario por última vez. Es la marca que decide quién gana al
+// fusionar con la hoja de Google (ver sync.js), así que tiene que vivir aparte de los datos.
+const MARCA_KEY = 'actualizado-v1';
+// Cuándo funcionó de VERDAD la sincronización por última vez (una lectura o una escritura
+// completadas contra su hoja). Es lo único que demuestra que la copia remota existe: unas
+// credenciales bien formadas no demuestran nada, y el semáforo se pintaba con eso.
+const SYNC_OK_KEY = 'sync-ultimo-ok-v1';
 
 let config = null;
 let datos = { ingresos: [], retiros: [], ventas: [], gastosNegocio: [], caja: {} };
-let vistaActiva = 'resumen';
+// "Y ahora qué" es la primera pestaña y la que abre por defecto.
+let vistaActiva = 'decisiones';
 let calModo = 'mes';
 let chartIngresos = null;
 
@@ -97,7 +117,7 @@ function getSaldo() { const o = localStorage.getItem(SALDO_KEY); return o ? JSON
 function getMeta() { const o = localStorage.getItem(META_KEY); return o !== null ? parseFloat(o) : (config.config.metaMensual || 0); }
 // Patrimonio: lo escribe el usuario, vive en localStorage. datos.json es solo la semilla.
 function getPatrimonio() { const o = localStorage.getItem(PATRIMONIO_KEY); return o ? JSON.parse(o) : (config.patrimonio || P.PATRIMONIO_VACIO); }
-function setPatrimonio(p) { localStorage.setItem(PATRIMONIO_KEY, JSON.stringify(p)); }
+function setPatrimonio(p) { localStorage.setItem(PATRIMONIO_KEY, JSON.stringify(p)); marcarCambio(); }
 // Config de IRPF: porcentaje y listas de conceptos. Editable desde el modal.
 function getIrpf() { const o = localStorage.getItem(IRPF_KEY); return o ? JSON.parse(o) : (config.config.irpf || C.IRPF_DEFAULT); }
 const split = () => config.config.split;
@@ -159,12 +179,13 @@ function setModelo(m) {
     && (previo.fijosManual === true || Math.abs(x.fijosNegocio - previo.fijosNegocio) > 0.005);
   if (manual) x.fijosManual = true;
   localStorage.setItem(MODELO_KEY, JSON.stringify(x));
+  marcarCambio();
 }
 
 function getDubai() {
   return O.normalizarDubai(leerJSON(DUBAI_KEY) || (config && config.config && config.config.dubai) || O.DUBAI_DEFAULT);
 }
-function setDubai(d) { localStorage.setItem(DUBAI_KEY, JSON.stringify(O.normalizarDubai(d))); }
+function setDubai(d) { localStorage.setItem(DUBAI_KEY, JSON.stringify(O.normalizarDubai(d))); marcarCambio(); }
 
 function getObjetivo() {
   const o = localStorage.getItem(OBJETIVO_KEY);
@@ -174,6 +195,119 @@ function getObjetivo() {
 function setObjetivo(v) {
   const n = parseFloat(v);
   localStorage.setItem(OBJETIVO_KEY, String(Number.isFinite(n) && n > 0 ? n : 0));
+  marcarCambio();
+}
+
+// ---------- Dónde vivir: ajustes de la comparativa de residencia ----------
+
+// Número de usuario, con suelo en 0. Vacío o basura -> el valor por defecto.
+function numOr(v, porDefecto) {
+  const n = typeof v === 'number' ? v : parseFloat(v);
+  return Number.isFinite(n) && n >= 0 ? n : porDefecto;
+}
+
+// La horquilla de coste de Dubái NO es una opción de cálculo: residencia.js trabaja con un
+// único coste anual, que es su punto medio (el método del propio informe, que usa 9.720
+// como medio de 8.470–10.970). Pero los dos extremos sí son una decisión del usuario, así
+// que viajan pegados al objeto, igual que `fijosManual` en el modelo del negocio.
+function conHorquillaDubai(destino, origen) {
+  destino.dubaiCosteMin = numOr(origen && origen.dubaiCosteMin, R.COSTES_DUBAI.recurrenteMin);
+  destino.dubaiCosteMax = numOr(origen && origen.dubaiCosteMax, R.COSTES_DUBAI.recurrenteMax);
+  return destino;
+}
+
+function getResidencia() {
+  const guardado = leerJSON(RESIDENCIA_KEY) || (config && config.config && config.config.residencia) || {};
+  return conHorquillaDubai(R.normalizarOpciones(guardado), guardado);
+}
+function setResidencia(o) {
+  localStorage.setItem(RESIDENCIA_KEY, JSON.stringify(conHorquillaDubai(R.normalizarOpciones(o), o)));
+  marcarCambio();
+}
+
+// ---------- El estado del usuario: copia, sincronización y marca de tiempo ----------
+
+// Cuándo cambió un dato por última vez. Se sella en cada guardado; sync.js la usa para
+// decidir si manda este dispositivo o la hoja de Google.
+function marcarCambio() {
+  localStorage.setItem(MARCA_KEY, new Date().toISOString());
+}
+
+// TODO lo que el usuario ha escrito a mano, con la forma que espera respaldo.js.
+// No incluye los datos de Tradingverso (se vuelven a bajar solos) ni las credenciales de
+// sincronización (son un secreto de este dispositivo).
+// OJO A LA MARCA, QUE AQUÍ SE DECIDE QUIÉN PISA A QUIÉN.
+//
+// Este estado sale SIN `actualizado` mientras el usuario no haya cambiado nada en este
+// dispositivo, y tiene que seguir siendo así: `comparaMarcas` (sync.js) hace perder al que
+// no tiene marca frente al que sí la tiene, que es exactamente lo que queremos de un
+// dispositivo recién estrenado. Sellarlo aquí lo convertiría en "el más nuevo" y le haría
+// machacar la hoja buena con lo que no ha escrito nadie.
+//
+// Lo que sí hay que sellar es lo que SUBE (ver `sincronizarAhora`) y lo que se GUARDA en un
+// archivo (ver `guardarCopia`): dos estados sin marca empatan, y en un empate gana el local,
+// así que una hoja escrita sin sello convierte a los demás dispositivos en perdedores
+// permanentes y sus datos desaparecen sin un solo mensaje de error.
+function estadoLocal() {
+  const e = {
+    saldoBanco: getSaldo(),
+    metaMensual: getMeta(),
+    gastosFijos: getGastos(),
+    irpf: getIrpf(),
+    modelo: getModelo(),
+    dubai: getDubai(),
+    patrimonio: getPatrimonio(),
+    objetivoLimpio: getObjetivo(),
+    residencia: getResidencia(),
+  };
+  const marca = localStorage.getItem(MARCA_KEY);
+  if (marca) e.actualizado = marca;
+  return e;
+}
+
+// Escribe un estado ya validado por respaldo.js sobre este dispositivo. Un campo que no
+// venga NO se toca: la copia manda solo sobre lo que trae, nunca borra lo que calla.
+function aplicarEstado(estado) {
+  const e = estado || {};
+  if (e.saldoBanco !== undefined) localStorage.setItem(SALDO_KEY, JSON.stringify(e.saldoBanco));
+  if (e.metaMensual !== undefined) localStorage.setItem(META_KEY, String(e.metaMensual));
+  if (e.gastosFijos !== undefined) localStorage.setItem(GASTOS_KEY, JSON.stringify(e.gastosFijos));
+  if (e.irpf !== undefined) localStorage.setItem(IRPF_KEY, JSON.stringify(e.irpf));
+  if (e.modelo !== undefined) localStorage.setItem(MODELO_KEY, JSON.stringify(e.modelo));
+  if (e.dubai !== undefined) localStorage.setItem(DUBAI_KEY, JSON.stringify(e.dubai));
+  if (e.patrimonio !== undefined) localStorage.setItem(PATRIMONIO_KEY, JSON.stringify(e.patrimonio));
+  if (e.objetivoLimpio !== undefined) localStorage.setItem(OBJETIVO_KEY, String(e.objetivoLimpio));
+  if (e.residencia !== undefined) localStorage.setItem(RESIDENCIA_KEY, JSON.stringify(e.residencia));
+  if (e.actualizado) localStorage.setItem(MARCA_KEY, e.actualizado);
+}
+
+// Credenciales de sincronización. Un solo objeto { url, clave } en una sola clave, para
+// que borrarlas sea una operación y no dos. NUNCA salen de este dispositivo.
+function getSync() {
+  const o = leerJSON(SYNC_KEY) || {};
+  return { url: String(o.url || ''), clave: String(o.clave || '') };
+}
+function setSync(url, clave) {
+  const nuevas = { url: String(url || '').trim(), clave: String(clave || '').trim() };
+  const viejas = getSync();
+  // Credenciales distintas = sincronización sin probar. El éxito de las anteriores no dice
+  // nada de éstas, y arrastrarlo pintaría de verde una hoja que todavía no ha contestado.
+  if (nuevas.url !== viejas.url || nuevas.clave !== viejas.clave) localStorage.removeItem(SYNC_OK_KEY);
+  localStorage.setItem(SYNC_KEY, JSON.stringify(nuevas));
+}
+
+// La prueba de que la sincronización funciona de verdad: se escribe SOLO cuando una lectura
+// o una escritura contra la hoja se han completado.
+function getSyncOk() { return localStorage.getItem(SYNC_OK_KEY) || ''; }
+function marcarSyncOk() {
+  const t = new Date().toISOString();
+  localStorage.setItem(SYNC_OK_KEY, t);
+  ultimaSync = t;
+  return t;
+}
+function haySync() {
+  const c = getSync();
+  return SYNC.validarCredenciales(c.url, c.clave).ok;
 }
 
 // Modelo + ventas medias ya resueltos contra los datos reales de Tradingverso. Lo usan
@@ -225,6 +359,20 @@ function fechaCorta(iso) {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+// Lo que YA está en este dispositivo, sin tocar la red. Es lo que se pinta antes de pedir
+// nada a nadie: abrir el dashboard no puede depender de que conteste un servidor.
+// -> true si había algo que pintar.
+function cargarDeCache() {
+  const c = leerJSON(CACHE_KEY);
+  if (!c) return false;
+  datos = c.datos || c;
+  ultimaActualizacion = c.ts || null;
+  desdeCache = true;
+  const est = document.getElementById('estado');
+  if (est) { est.textContent = 'Desde caché'; est.className = 'estado cache'; }
+  return true;
+}
+
 async function cargarNegocio() {
   const est = document.getElementById('estado');
   est.textContent = 'Conectando… (puede tardar unos segundos)'; est.className = 'estado';
@@ -240,19 +388,10 @@ async function cargarNegocio() {
     desdeCache = false;
     localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: ultimaActualizacion, datos }));
     est.textContent = `En vivo · ${horaAhora()}`; est.className = 'estado online';
-  } else {
-    const cache = localStorage.getItem(CACHE_KEY);
-    if (cache) {
-      const c = JSON.parse(cache);
-      datos = c.datos || c;
-      ultimaActualizacion = c.ts || null;
-      desdeCache = true;
-      est.textContent = 'Desde caché'; est.className = 'estado cache';
-    } else {
-      datos = { ingresos: [], retiros: [], ventas: [], gastosNegocio: [], caja: {} };
-      ultimaActualizacion = null; desdeCache = true;
-      est.textContent = 'Sin conexión'; est.className = 'estado error';
-    }
+  } else if (!cargarDeCache()) {
+    datos = { ingresos: [], retiros: [], ventas: [], gastosNegocio: [], caja: {} };
+    ultimaActualizacion = null; desdeCache = true;
+    est.textContent = 'Sin conexión'; est.className = 'estado error';
   }
 }
 
@@ -554,14 +693,16 @@ function renderMiDinero() {
   document.getElementById('aviso-midinero').innerHTML = aviso;
 
   const gf = getGastos();
-  let lg = gf.map((g) => card(`${g.nombre} · día ${g.diaPago || 1}`, `<span class="num">${f(g.importe)}</span>`)).join('');
+  // esc(): el nombre del gasto lo escribe el usuario, pero también puede entrar entero
+  // desde una copia de seguridad importada (respaldo.js no escapa nada, solo recorta).
+  let lg = gf.map((g) => card(`${esc(g.nombre)} · día ${g.diaPago || 1}`, `<span class="num">${f(g.importe)}</span>`)).join('');
   lg += `<div class="card acento"><div class="l">Total fijo / mes</div><div class="v num">${f(gastos)}</div></div>`;
   document.getElementById('lista-gastos').innerHTML = lg;
 
   const saldo = getSaldo();
   const real = C.saldoReal(saldo.importe, gastos);
   document.getElementById('saldo-detalle').innerHTML = [
-    card('Saldo banco', `<span class="num">${f(saldo.importe)}</span>`, `actualizado ${saldo.fechaActualizacion}`),
+    card('Saldo banco', `<span class="num">${f(saldo.importe)}</span>`, `actualizado ${esc(saldo.fechaActualizacion)}`),
     card('Gastos fijos pendientes', `<span class="num">${f(gastos)}</span>`),
     card('Saldo real tras gastos', `<span class="num ${real >= 0 ? 'pos' : 'neg'}">${f(real)}</span>`),
   ].join('');
@@ -772,16 +913,20 @@ function abrirDetalleDia(iso) {
       <div><span class="l">Tras IRPF (${pctIrpf}%)<span class="badge-est">estimado</span></span><span class="v ${trasIrpf >= 0 ? 'pos' : 'neg'}">${f(trasIrpf)}</span></div>
     </div>`;
 
+  // TODO lo que sale de la hoja de Tradingverso pasa por esc(). tradinverso.js solo valida
+  // la fecha con una regex: cliente, método, país, concepto, proveedor y categoría llegan
+  // como cadenas crudas de un Apps Script que no es de él, sino de la empresa de su socio.
+  // Y se cachean en localStorage, así que un texto con HTML dentro sobreviviría a recargas.
   if (ventas.length) {
     html += `<div class="dia-seccion"><h4>Ventas (${ventas.length}) · por qué entró dinero</h4>` +
       ventas.map((v) =>
-        `<div class="dia-linea"><span class="cpt">${v.cliente || 'Venta'}<small>${v.metodo || ''}${v.pais ? ' · ' + v.pais : ''}</small></span><span class="imp">${f(v.neto)}</span><span class="mio pos">+${f(v.neto * sp.yo)}</span></div>`
+        `<div class="dia-linea"><span class="cpt">${esc(v.cliente || 'Venta')}<small>${esc(v.metodo || '')}${v.pais ? ` · ${esc(v.pais)}` : ''}</small></span><span class="imp">${f(v.neto)}</span><span class="mio pos">+${f(v.neto * sp.yo)}</span></div>`
       ).join('') + '</div>';
   }
   if (gastos.length) {
     html += `<div class="dia-seccion"><h4>Gastos del negocio (${gastos.length}) · en qué se fue</h4>` +
       gastos.map((g) =>
-        `<div class="dia-linea"><span class="cpt">${g.concepto || 'Gasto'}<small>${[g.proveedor, g.categoria].filter(Boolean).join(' · ')}</small></span><span class="imp">−${f(g.total)}</span><span class="mio neg">−${f(C.miParteDe(g.total, sp))}</span></div>`
+        `<div class="dia-linea"><span class="cpt">${esc(g.concepto || 'Gasto')}<small>${esc([g.proveedor, g.categoria].filter(Boolean).join(' · '))}</small></span><span class="imp">−${f(g.total)}</span><span class="mio neg">−${f(C.miParteDe(g.total, sp))}</span></div>`
       ).join('') + '</div>';
   }
   if (retiros.length) {
@@ -813,9 +958,43 @@ function abrirDetalleDia(iso) {
   document.getElementById('modal-dia').classList.remove('oculto');
 }
 
+// El ctx completo de "Y ahora qué". decisiones.js es un módulo puro: no mira el reloj, no
+// lee localStorage y no sabe de dónde salen los datos. Todo entra por aquí.
+//
+// `datos` viaja con un `config` dentro porque es donde decisiones.js busca el reparto 40/60
+// y los gastos fijos si no le llegan por otro lado; se le pasan además sueltos para que
+// manden los del usuario. `tarifaPlana` sale de la config: el mes de alta en el RETA no
+// está en ningún otro sitio de la app, y sin él ese hito lo dice en vez de inventárselo.
+function ctxDecisiones() {
+  const mv = modeloVivo();
+  const hoy = hoyISO();
+  const gastosFijos = getGastos();
+  return {
+    datos: {
+      ...datos,
+      config: {
+        split: split(),
+        gastosFijos,
+        tarifaPlana: (config && config.config && config.config.tarifaPlana) || {},
+      },
+    },
+    modelo: mv.modelo,
+    ventasMedia: mv.ventasMedia,
+    situacionFiscal: O.situacionFiscalDelAnio(datos, mv.modelo, hoy),
+    patrimonio: getPatrimonio(),
+    residencia: getResidencia(),
+    gastosFijos,
+    tarifaPlana: (config && config.config && config.config.tarifaPlana) || {},
+    hoyISO: hoy,
+    f,
+    card,
+  };
+}
+
 // ---------- Router ----------
 function renderVista(v) {
-  if (v === 'resumen') renderResumen();
+  if (v === 'decisiones') renderDecisiones(ctxDecisiones());
+  else if (v === 'resumen') renderResumen();
   else if (v === 'historico') renderHistorico();
   else if (v === 'retiros') renderRetiros();
   else if (v === 'midinero') renderMiDinero();
@@ -851,8 +1030,43 @@ function renderVista(v) {
       f,
       card,
     });
+  } else if (v === 'residencia') {
+    const mv = modeloVivo();
+    renderResidencia({
+      beneficioAnual: beneficioAnualProyectado(mv.modelo),
+      opciones: getResidencia(),
+      // El modelo del negocio viaja para poder traducir los umbrales a ventas al mes, que
+      // es lo único de todo esto que él controla de verdad. Sin él la vista se calla esa
+      // línea en vez de inventarse una equivalencia.
+      modelo: mv.modelo,
+      ventasMedia: mv.ventasMedia,
+      f,
+      card,
+    });
   }
   postRender(v);
+}
+
+// El beneficio ANUAL con el que se compara vivir en cada sitio: su parte del beneficio del
+// negocio de lo que va de año, proyectada a doce meses.
+//
+// Sale de `situacionFiscalDelAnio`, que es quien ya cuenta las ventas y los gastos reales
+// desde el 1 de enero. El tiempo transcurrido se cuenta con la fracción del mes en curso
+// (igual que hace ese módulo por dentro): con meses enteros, cada día 1 el divisor subía
+// de golpe mientras los ingresos del mes nuevo aún eran cero y la proyección se desplomaba.
+//
+// Ojo con la magnitud: `miParteYtd` es antes de cuota de autónomo y de impuestos (eso lo
+// resta cada escenario a su manera) y después de los gastos del NEGOCIO. La asesoría
+// personal no está descontada aquí; la pantalla lo dice.
+function beneficioAnualProyectado(modelo) {
+  const hoy = hoyISO();
+  const s = O.situacionFiscalDelAnio(datos, modelo, hoy);
+  const mes = Number(hoy.slice(5, 7));
+  const dia = Number(hoy.slice(8, 10));
+  const diasDelMes = new Date(Date.UTC(Number(hoy.slice(0, 4)), mes, 0)).getUTCDate();
+  const transcurrido = (mes - 1) + dia / diasDelMes;
+  if (!(transcurrido > 0) || !Number.isFinite(s.miParteYtd)) return 0;
+  return Math.max(0, (s.miParteYtd / transcurrido) * 12);
 }
 function cambiarVista(v) {
   vistaActiva = v;
@@ -864,7 +1078,9 @@ function cambiarVista(v) {
 // ---------- Modal ----------
 function pintarGastosEdit() {
   document.getElementById('g-gastos').innerHTML = getGastos().map((g, i) =>
-    `<div class="gasto-fila"><input data-i="${i}" data-k="nombre" value="${g.nombre}" placeholder="Concepto"/><input data-i="${i}" data-k="importe" class="imp" type="number" step="0.01" value="${g.importe}" placeholder="€"/></div>`
+    // esc() también dentro de un atributo: sin él, un nombre con comillas rompe el value y
+    // lo que venga detrás se convierte en atributos del input (un onfocus, por ejemplo).
+    `<div class="gasto-fila"><input data-i="${i}" data-k="nombre" value="${esc(g.nombre)}" placeholder="Concepto"/><input data-i="${i}" data-k="importe" class="imp" type="number" step="0.01" value="${g.importe}" placeholder="€"/></div>`
   ).join('');
 }
 function leerGastosEdit() {
@@ -889,6 +1105,10 @@ function abrirModal() {
   document.getElementById('g-banco').value = (irpf.conceptosBanco || []).join(', ');
   document.getElementById('g-cripto').value = (irpf.conceptosCripto || []).join(', ');
   pintarGastosEdit();
+  const cred = getSync();
+  document.getElementById('g-sync-url').value = cred.url;
+  document.getElementById('g-sync-clave').value = cred.clave;
+  pintarEstadoDatos();
   document.getElementById('modal').classList.remove('oculto');
 }
 function cerrarModal() { document.getElementById('modal').classList.add('oculto'); }
@@ -905,6 +1125,7 @@ function guardarModal() {
     conceptosBanco: leerConceptos('g-banco'),
     conceptosCripto: leerConceptos('g-cripto'),
   }));
+  marcarCambio();
   cerrarModal();
   renderVista(vistaActiva);
 }
@@ -914,7 +1135,20 @@ function exportarJSON() {
     saldoBanco: getSaldo(),
     // El modelo viaja con su bandera `fijosManual`: si el usuario tecleó los fijos, esa
     // decisión tiene que sobrevivir al viaje por GitHub, no perderse por el camino.
-    config: { ...config.config, gastosFijos: getGastos(), irpf: getIrpf(), modelo: getModelo(), dubai: getDubai() },
+    // Los ajustes de "Dónde vivir" viajan igual, con su horquilla de Dubái.
+    //
+    // LO QUE NO VIAJA AQUÍ: la URL y la clave del Apps Script. Este fichero se sube a un
+    // repositorio PÚBLICO (GitHub Pages), y la cabecera de sync.js es explícita: ni la
+    // clave ni la dirección van en datos.json ni en ningún fichero versionado. Viven solo
+    // en el localStorage de cada dispositivo y se teclean una vez por dispositivo.
+    config: {
+      ...config.config,
+      gastosFijos: getGastos(),
+      irpf: getIrpf(),
+      modelo: getModelo(),
+      dubai: getDubai(),
+      residencia: getResidencia(),
+    },
     patrimonio: getPatrimonio(),
     objetivoLimpio: getObjetivo(),
   };
@@ -922,6 +1156,214 @@ function exportarJSON() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = 'datos.json'; a.click();
   URL.revokeObjectURL(url);
+}
+
+// ---------- Dónde viven tus datos: copia en archivo y sincronización ----------
+//
+// La pregunta que contesta este bloque es una sola: "si mañana limpio el navegador, ¿pierdo
+// mis cuentas?". Por eso el estado se dice en rojo o en verde y no en letra pequeña.
+
+// Cuándo se sincronizó por última vez EN ESTA SESIÓN. No se persiste: la marca que de
+// verdad manda es la del dato (MARCA_KEY), y esto es solo para poder decir "hace X".
+let ultimaSync = null;
+
+function getUltimaCopia() { return localStorage.getItem(COPIA_KEY) || ''; }
+
+// Un mensaje bajo un bloque de botones. 'ok' verde, 'mal' rojo, 'info' una línea gris.
+function pintarMensaje(id, tipo, html) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!html) { el.innerHTML = ''; return; }
+  if (tipo === 'info') { el.innerHTML = `<p class="nota">${html}</p>`; return; }
+  el.innerHTML = `<div class="alerta${tipo === 'ok' ? ' ok' : ''}">${tipo === 'ok' ? ICON_OK : ICON_WARN}<span>${html}</span></div>`;
+}
+
+// El semáforo del modal. Contesta a una sola pregunta: "si mañana limpio el navegador,
+// ¿pierdo mis cuentas?". Así que el verde tiene que exigir una PRUEBA, no una promesa.
+//
+// Antes el color lo decidía `validarCredenciales`, que solo mira la FORMA (que la URL
+// empiece por https y la clave tenga 16 caracteres). Con dos campos bien rellenados y una
+// URL que no existe pintaba verde y borraba el aviso rojo permanente. Ahora hay tres
+// estados y el verde lo da `SYNC_OK_KEY`, que solo se escribe cuando la hoja ha contestado
+// de verdad:
+//   verde  = ha funcionado alguna vez (y no se han cambiado las credenciales desde entonces)
+//   ámbar  = credenciales puestas, pero sin ninguna conexión conseguida todavía
+//   rojo   = ni sincronización ni copia: los datos solo están aquí
+function pintarEstadoDatos() {
+  const cont = document.getElementById('g-estado-datos');
+  const cred = getSync();
+  const forma = SYNC.validarCredenciales(cred.url, cred.clave).ok;
+  const exito = getSyncOk();
+  const conectado = forma && !!exito;
+  const copia = getUltimaCopia();
+  const textoCopia = RESP.textoUltimaCopia(copia, hoyISO());
+
+  if (cont) {
+    if (conectado) {
+      cont.innerHTML = `<div class="trust ok">${ICON_OK}<div><strong>Sincronizado ${haceCuanto(ultimaSync || exito)}</strong><span>${esc(textoCopia)}</span></div></div>`;
+    } else if (forma) {
+      cont.innerHTML = `<div class="trust aviso">${ICON_WARN}<div><strong>Configurado, pero todavía sin probar</strong><span>Nunca se ha conseguido hablar con tu hoja desde este dispositivo. Pulsa "Probar conexión": hasta que funcione, tus datos siguen solo aquí. ${esc(textoCopia)}</span></div></div>`;
+    } else {
+      cont.innerHTML = `<div class="trust bad">${ICON_WARN}<div><strong>Tus datos están solo en este navegador</strong><span>${esc(textoCopia)} Si lo limpias o cambias de perfil, los pierdes.</span></div></div>`;
+    }
+  }
+
+  // El aviso rojo permanente de arriba solo se va con algo real: una copia en archivo o una
+  // sincronización que haya funcionado. Unas credenciales sin estrenar no lo quitan.
+  const arriba = document.getElementById('g-copia-aviso');
+  if (arriba) {
+    arriba.innerHTML = (!conectado && !copia)
+      ? `<div class="alerta">${ICON_WARN}<span><strong>Tus datos personales solo están en este navegador. Si lo limpias, los pierdes.</strong><span class="mc">Al final de esta ventana tienes "Guardar copia" y la sincronización con tu hoja de Google.</span></span></div>`
+      : '';
+  }
+}
+
+// Descarga el estado entero en un archivo suyo. `respaldo.js` lo mete en un sobre con
+// versión y fecha para poder leerlo dentro de dos años.
+function guardarCopia() {
+  const ahora = new Date().toISOString();
+  try {
+    // Sellado también aquí: si el archivo sale sin marca, el día que se importe dejará al
+    // dispositivo mudo frente a la hoja y la copia se perderá en la siguiente sincronización.
+    // No se toca MARCA_KEY: guardar una copia no es cambiar un dato.
+    const nombre = RESP.descargar(RESP.nombreDeCopia(ahora), RESP.exportarTodo(RESP.marcarActualizado(estadoLocal(), ahora), ahora));
+    localStorage.setItem(COPIA_KEY, ahora);
+    pintarEstadoDatos();
+    pintarMensaje('g-copia-msg', 'ok', `Copia descargada: <strong>${esc(nombre)}</strong>. Guárdala donde no dependa de este navegador: iCloud, Drive o tu propio correo.`);
+  } catch (e) {
+    pintarMensaje('g-copia-msg', 'mal', `No se ha podido descargar la copia: ${esc(e.message)}`);
+  }
+}
+
+// Lee una copia de archivo. REGLA DE ORO: si viene rota, no se machaca nada de lo que ya
+// hay. `importarTodo` devuelve ok:false y aquí se corta sin tocar el localStorage.
+function cargarCopia(file) {
+  if (!file) return;
+  const lector = new FileReader();
+  lector.onerror = () => pintarMensaje('g-copia-msg', 'mal', 'No se ha podido leer el archivo.');
+  // El try no es decorativo: una excepción dentro de un `onload` no la ve nadie (el
+  // `onerror` del FileReader solo cubre errores de LECTURA del fichero, no del handler).
+  // Sin él, el usuario pulsa "Cargar copia" y no pasa nada: ni verde, ni rojo, ni pista.
+  // Un fallo silencioso es peor que un error, porque no se sabe qué ha quedado a medias.
+  lector.onload = () => {
+    try {
+      const r = RESP.importarTodo(String(lector.result || ''));
+      if (!r.ok) {
+        pintarMensaje('g-copia-msg', 'mal', `<strong>No se ha importado nada.</strong> ${r.errores.map(esc).join(' ')}<span class="mc">Lo que tenías sigue intacto.</span>`);
+        return;
+      }
+      aplicarEstado(r.estado);
+      abrirModal(); // relee todos los campos del modal con lo que acaba de entrar
+      const avisos = r.avisos.length ? `<span class="mc">${r.avisos.map(esc).join(' ')}</span>` : '';
+      pintarMensaje('g-copia-msg', 'ok', `Copia cargada.${avisos}`);
+      renderVista(vistaActiva);
+    } catch (e) {
+      console.error('Error al importar la copia', e);
+      pintarMensaje('g-copia-msg', 'mal', `<strong>No se ha podido leer esa copia.</strong> ${esc(e && e.message)}<span class="mc">Lo que tenías sigue intacto. Si el archivo lo ha generado otra herramienta, vuelve a exportarlo desde aquí.</span>`);
+    }
+  };
+  lector.readAsText(file);
+}
+
+// Lee lo que hay en los dos campos y lo guarda si es válido. -> credenciales o null.
+function credencialesDelModal() {
+  const url = document.getElementById('g-sync-url').value;
+  const clave = document.getElementById('g-sync-clave').value;
+  const v = SYNC.validarCredenciales(url, clave);
+  if (!v.ok) {
+    pintarMensaje('g-sync-msg', 'mal', v.errores.map(esc).join(' '));
+    return null;
+  }
+  setSync(url, clave);
+  return { url: String(url).trim(), clave: String(clave).trim() };
+}
+
+// Un botón que hace algo lento: se desactiva mientras tanto para que dos toques seguidos
+// no disparen dos peticiones.
+async function conBoton(id, fn) {
+  const btn = document.getElementById(id);
+  if (btn) btn.disabled = true;
+  try { await fn(); } finally { if (btn) btn.disabled = false; }
+}
+
+// "Probar conexión": una lectura de verdad contra su hoja, que es la única forma honesta
+// de decir si funciona.
+async function probarSync() {
+  const cred = credencialesDelModal();
+  if (!cred) return;
+  pintarMensaje('g-sync-msg', 'info', 'Probando la conexión con tu hoja de Google…');
+  try {
+    const r = await SYNC.leerRemoto(cred.url, cred.clave);
+    // La hoja ha contestado: esto, y solo esto, es lo que pone el semáforo en verde.
+    marcarSyncOk();
+    pintarEstadoDatos();
+    pintarMensaje('g-sync-msg', 'ok', r.existe
+      ? `Funciona. Tu hoja ya tiene datos guardados${r.fecha ? ` (${esc(r.fecha)})` : ''}. Con "Sincronizar ahora" se junta con lo de este dispositivo: gana lo más reciente.`
+      : 'Funciona, pero tu hoja todavía está vacía. Pulsa "Sincronizar ahora" para subir lo de este dispositivo.');
+  } catch (e) {
+    pintarMensaje('g-sync-msg', 'mal', esc(e.message));
+  }
+}
+
+// "Sincronizar ahora": leer, fusionar por fecha y, si manda este dispositivo, subir.
+async function sincronizarAhora() {
+  const cred = credencialesDelModal();
+  if (!cred) return;
+  pintarMensaje('g-sync-msg', 'info', 'Sincronizando…');
+  try {
+    const remoto = await SYNC.leerRemoto(cred.url, cred.clave);
+    const local = estadoLocal();
+    const veredicto = SYNC.estadoSync(local, remoto.estado);
+    const fus = SYNC.fusionar(local, remoto.estado);
+
+    let texto;
+    if (fus.origen === 'remoto') {
+      const limpio = RESP.normalizarEstado(fus.estado);
+      if (!limpio) throw new Error('Lo que hay guardado en tu hoja no tiene la forma esperada. No se ha tocado nada de este dispositivo; usa la copia en archivo.');
+      aplicarEstado(limpio);
+      texto = 'Tu hoja tenía cambios más nuevos: este dispositivo ya está al día.';
+    } else {
+      // Se sube SELLADO, siempre. Un estado sin marca en la hoja no gana ni pierde: empata,
+      // y en un empate gana el local, así que el siguiente dispositivo no se bajaría nada y
+      // acabaría subiendo lo suyo encima. Y la misma marca se guarda aquí, para que este
+      // dispositivo y la hoja digan exactamente lo mismo a partir de ahora.
+      const ahora = new Date().toISOString();
+      const guardado = await SYNC.guardarRemoto(cred.url, cred.clave, RESP.marcarActualizado(estadoLocal(), ahora));
+      localStorage.setItem(MARCA_KEY, ahora);
+      texto = `Subido a tu hoja de Google${guardado.fecha ? ` (${esc(guardado.fecha)})` : ''}.`;
+    }
+
+    marcarSyncOk();
+    abrirModal();
+    pintarMensaje('g-sync-msg', 'ok', `${texto} <span class="mc">${esc(SYNC.textoEstadoSync(veredicto))}</span>`);
+    renderVista(vistaActiva);
+  } catch (e) {
+    pintarMensaje('g-sync-msg', 'mal', esc(e.message));
+  }
+}
+
+// Al arrancar: si hay sincronización montada, se lee la hoja y se fusiona. Ya no bloquea el
+// primer pintado (ver `init`): la sincronización es una red de seguridad, no un requisito
+// para abrir el dashboard, y el código hacía justo lo contrario que decía este comentario.
+async function sincronizarAlArrancar() {
+  const cred = getSync();
+  if (!SYNC.validarCredenciales(cred.url, cred.clave).ok) return;
+  try {
+    // Tres segundos, no quince: un servidor que acepta el TLS y no contesta nunca no
+    // dispara ningún error, solo agota el temporizador. Si la hoja no responde en ese
+    // rato, no merece la pena seguir esperándola; lo que haya aquí ya está en pantalla.
+    const remoto = await SYNC.leerRemoto(cred.url, cred.clave, 3000);
+    const fus = SYNC.fusionar(estadoLocal(), remoto.estado);
+    if (fus.origen === 'remoto') {
+      const limpio = RESP.normalizarEstado(fus.estado);
+      if (limpio) aplicarEstado(limpio);
+    }
+    marcarSyncOk();
+  } catch (e) {
+    // Si la hoja deja de contestar (despliegue caducado, sin red), NO se toca SYNC_OK_KEY:
+    // el semáforo seguirá diciendo cuándo funcionó por última vez, que es la verdad.
+    console.warn('No se ha podido leer la copia remota al arrancar', e);
+  }
 }
 
 // ---------- Eventos ----------
@@ -946,6 +1388,18 @@ function bind() {
     const actuales = leerGastosEdit(); actuales.push({ nombre: '', importe: 0, diaPago: 1 });
     localStorage.setItem(GASTOS_KEY, JSON.stringify(actuales)); pintarGastosEdit();
   });
+  // Copia en archivo y sincronización. El input de archivo va oculto: el botón lo dispara.
+  document.getElementById('g-guardar-copia').addEventListener('click', guardarCopia);
+  document.getElementById('g-cargar-copia').addEventListener('click', () => document.getElementById('g-cargar-copia-input').click());
+  document.getElementById('g-cargar-copia-input').addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    // Se limpia el input para que elegir DOS VECES el mismo archivo vuelva a disparar el
+    // 'change'; si no, el segundo intento se quedaría sin hacer nada y sin decir por qué.
+    e.target.value = '';
+    cargarCopia(file);
+  });
+  document.getElementById('g-sync-probar').addEventListener('click', () => conBoton('g-sync-probar', probarSync));
+  document.getElementById('g-sync-ahora').addEventListener('click', () => conBoton('g-sync-ahora', sincronizarAhora));
   document.getElementById('filtro-retiros').addEventListener('change', renderRetiros);
   // Filtros de fecha del historial. Se combinan con el select de reparto (todos/yo/david).
   document.getElementById('filtro-anio').addEventListener('change', () => {
@@ -966,6 +1420,18 @@ function bind() {
   bindObjetivo({
     getModelo, setModelo, getDubai, setDubai, getObjetivo, setObjetivo,
     rerender: () => renderVista('objetivo'),
+  });
+  // Dónde vivir: igual, una sola vez (bindResidencia también se protege con dataset).
+  bindResidencia({
+    getOpciones: getResidencia,
+    setOpciones: setResidencia,
+    rerender: () => renderVista('residencia'),
+  });
+  // Y ahora qué: solo necesita poder saltar a otra pestaña (el detalle de los países está
+  // en "Dónde vivir"). El plegado del camino lo hace <details> por su cuenta.
+  bindDecisiones({
+    irA: (v) => cambiarVista(v),
+    rerender: () => renderVista('decisiones'),
   });
   document.getElementById('cal-mes').addEventListener('change', renderCalendario);
   document.getElementById('cal-fecha').addEventListener('change', renderCalendario);
@@ -989,8 +1455,24 @@ if ('serviceWorker' in navigator) {
 }
 
 (async function init() {
+  // Lo único que se espera es datos.json, que es un fichero local del propio sitio.
   await cargarConfig();
   bind();
-  await cargarNegocio();
-  cambiarVista('resumen');
+
+  // PRIMERO SE PINTA. Con lo que ya hay en este dispositivo: la caché de Tradingverso y sus
+  // datos de localStorage. Antes se esperaba a la hoja de Google (hasta 10 s) y a dos
+  // intentos contra Tradingverso (hasta 60 s) ANTES de pintar la primera vista, así que con
+  // la red muerta el usuario se quedaba mirando un esqueleto vacío más de un minuto, sin
+  // spinner y sin explicación. Nada de lo que llega por red es necesario para abrir.
+  cargarDeCache();
+  cambiarVista('decisiones');
+
+  // Y DESPUÉS se pide por red, cada cosa por su cuenta y repintando cuando llegue. Van en
+  // paralelo a propósito: son independientes y ninguna tiene que esperar a la otra.
+  sincronizarAlArrancar()
+    .then(() => renderVista(vistaActiva))
+    .catch((e) => console.warn('Sincronización al arrancar', e));
+  cargarNegocio()
+    .then(() => renderVista(vistaActiva))
+    .catch((e) => console.error('Error al cargar los datos del negocio', e));
 })();

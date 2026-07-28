@@ -173,6 +173,9 @@ main { max-width: 1120px; margin: 0 auto; padding: 24px 28px 80px; }
 .trust.ok svg { color: var(--green); }
 .trust.bad { border-color: var(--red); background: var(--red-dim); }
 .trust.bad svg { color: var(--red); }
+/* Configurado pero sin probar: ni verde ni rojo. Ver pintarEstadoDatos en app.js. */
+.trust.aviso { border-color: var(--amber); background: var(--amber-dim); }
+.trust.aviso svg { color: var(--amber); }
 .vchecks { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; padding-left: 4px; }
 .vcheck { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
 .vcheck .vic { width: 14px; height: 14px; flex-shrink: 0; }
@@ -914,3 +917,482 @@ td.col-real { font-weight: 600; }
   .tramo-datos { grid-template-columns: 1fr; gap: 8px; }
   .obj-ajustes { grid-template-columns: 1fr; }
 }
+
+/* ============================================================
+   DÓNDE VIVIR — ranking de escenarios, umbrales y ajustes
+   (añadidos: reutiliza .card, .casc, .seg, .tabla-wrap y .aviso-ambar)
+   ============================================================ */
+
+/* ---------- A) Tu beneficio anual ---------- */
+.res-mio {
+  border: 1px solid var(--border); border-radius: 18px;
+  background: linear-gradient(180deg, var(--surface2), var(--surface));
+  padding: 26px 24px; text-align: center;
+}
+.res-mio-l {
+  font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .08em;
+}
+.res-mio-v {
+  font-size: clamp(34px, 7vw, 56px); font-weight: 500; letter-spacing: -.03em;
+  line-height: 1.05; margin-top: 8px;
+}
+.res-mio-pie { display: block; margin: 12px auto 0; max-width: 62ch; line-height: 1.55; }
+.res-mio-cards { margin-top: 16px; }
+
+.res-probar {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border);
+}
+.res-probar-l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.res-probar-input {
+  width: min(260px, 100%); padding: 11px 14px; text-align: center;
+  border: 1px solid var(--border2); border-radius: 12px; background: var(--surface2);
+  color: var(--text); font-family: var(--fm); font-variant-numeric: tabular-nums;
+  font-size: 22px; -moz-appearance: textfield;
+}
+.res-probar-input::-webkit-outer-spin-button,
+.res-probar-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.res-probar-input:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px var(--green-dim); }
+
+/* ---------- B) El ranking ---------- */
+#res-ranking { display: grid; gap: 14px; }
+.res-card {
+  border: 1px solid var(--border); border-radius: 16px; background: var(--surface);
+  padding: 18px 20px; cursor: pointer;
+  transition: border-color .2s var(--ease), transform .15s var(--ease);
+}
+.res-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+.res-card:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.res-card.sel { border-color: var(--border2); box-shadow: inset 3px 0 0 var(--blue); }
+.res-card.acento { border-color: rgba(0, 200, 150, .4); background: linear-gradient(180deg, var(--green-dim), transparent 60%), var(--surface); }
+.res-card-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.res-card-nombre { font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+.res-card-neto {
+  font-size: clamp(24px, 5vw, 34px); font-weight: 500; letter-spacing: -.02em;
+  line-height: 1.1; margin-top: 8px;
+}
+.res-card-pct { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin-top: 6px; }
+.res-card-pct strong { color: var(--text); font-family: var(--fm); font-variant-numeric: tabular-nums; }
+.res-card-dif, .res-card-rango { display: block; margin-top: 6px; line-height: 1.5; }
+/* Los avisos de cada escenario van dentro de su tarjeta: más compactos que los sueltos. */
+.res-card .aviso-ambar.res-aviso {
+  margin: 10px 0 0; padding: 9px 12px; font-size: 12px; border-radius: 10px; gap: 8px;
+}
+.res-card .aviso-ambar.res-aviso svg { width: 15px; height: 15px; }
+
+/* ---------- C) El desglose ---------- */
+.res-esc-sel { flex-wrap: wrap; }
+.res-supuesto { display: block; margin: 10px 0 14px; line-height: 1.6; max-width: 82ch; }
+/* Una fila que SUMA dentro de la cascada (la cuota del mínimo personal). El CSS pone el
+   signo, igual que .casc-resta pone el menos. */
+.casc-suma .cpt { color: var(--muted); }
+.casc-suma .imp { color: var(--green); }
+.casc-suma .imp::before { content: '+'; margin-right: 3px; }
+
+/* ---------- D) Los umbrales ---------- */
+.res-umbral {
+  border: 1px solid var(--border); border-radius: 16px; background: var(--surface);
+  padding: 20px 22px; margin-bottom: 14px;
+}
+.res-umbral-tit {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em;
+}
+.res-umbral-sec { font-size: 10px; color: var(--dim); text-transform: none; letter-spacing: 0; }
+.res-umbral-v {
+  font-size: clamp(16px, 3.2vw, 21px); font-weight: 700; letter-spacing: -.01em;
+  line-height: 1.35; margin-top: 8px;
+}
+.res-umbral-v strong { font-family: var(--fm); font-variant-numeric: tabular-nums; color: var(--green); font-weight: 700; }
+.res-umbral-pie { font-size: 12.5px; color: var(--muted); line-height: 1.55; margin-top: 10px; }
+.res-umbral-pie strong { font-family: var(--fm); font-variant-numeric: tabular-nums; color: var(--text); }
+.res-umbral-ventas { display: block; margin-top: 8px; line-height: 1.55; }
+.res-umbral-ventas strong { font-family: var(--fm); font-variant-numeric: tabular-nums; color: var(--amber); }
+.res-umbral-salto { display: block; margin-top: 8px; line-height: 1.55; color: var(--amber); }
+.res-umbral-horquilla { display: block; margin-top: 8px; line-height: 1.55; }
+.res-umbral-horquilla strong { font-family: var(--fm); font-variant-numeric: tabular-nums; color: var(--text); }
+.res-umbral-nota { margin-top: 6px; }
+
+/* La barra: dónde está él y dónde está el cruce, a la misma escala. Las rayas van en su
+   punto exacto (posición absoluta); las etiquetas, en una fila aparte que no desborda. */
+.res-barra { position: relative; margin: 24px 0 8px; }
+.res-barra-track { height: 8px; border-radius: 999px; background: var(--surface2); overflow: hidden; }
+.res-barra-lleno { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--green), var(--blue)); }
+.res-barra-marca {
+  position: absolute; top: -6px; width: 2px; height: 20px;
+  border-radius: 1px; transform: translateX(-50%);
+}
+.res-barra-marca.yo { background: var(--green); }
+.res-barra-marca.cruce { background: var(--amber); }
+.res-barra-pies {
+  display: flex; justify-content: space-between; gap: 10px;
+  margin-top: 14px; font-size: 10px;
+  font-family: var(--fm); font-variant-numeric: tabular-nums;
+}
+.res-barra-pies .yo { color: var(--green); }
+.res-barra-pies .cruce { color: var(--amber); }
+
+/* ---------- E) La tabla ---------- */
+#res-tabla td small { display: block; font-size: 10px; color: var(--dim); margin-top: 2px; }
+#res-tabla td.res-gana { background: var(--green-dim); color: var(--green); }
+#res-tabla td.res-gana small { color: var(--green); opacity: .7; }
+#res-tabla tr.hoy td, #res-tabla tr.hoy:hover td { background: var(--amber-dim); }
+#res-tabla tr.hoy td.res-gana { background: linear-gradient(0deg, var(--green-dim), var(--green-dim)), var(--amber-dim); }
+
+/* ---------- F) Ajustes ---------- */
+.res-ajustes select {
+  padding: 9px 11px; border: 1px solid var(--border2); border-radius: 9px;
+  background: var(--surface2); color: var(--text); font-family: var(--fh); font-size: 13px;
+  width: 100%; min-width: 0;
+}
+.res-ajustes select:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px var(--green-dim); }
+/* Un campo cuyo valor NO está en el informe: se marca en ámbar para que no se confunda
+   con una cifra con fuente. */
+.res-sin-fuente { color: var(--amber); }
+.res-ajustes-medio { margin-top: 12px; }
+.res-ajustes-medio strong { font-family: var(--fm); font-variant-numeric: tabular-nums; color: var(--text); }
+
+/* ---------- Móvil: manda el iPhone (PWA) ---------- */
+@media (max-width: 640px) {
+  #v-residencia { max-width: 100%; overflow-x: hidden; }
+  #res-mio, #res-ranking, #res-detalle, #res-umbrales, #res-ajustes { max-width: 100%; overflow-x: hidden; }
+
+  .res-mio { padding: 20px 16px; border-radius: 15px; }
+  .res-probar-input { font-size: 20px; }
+
+  .res-card { padding: 15px 16px; border-radius: 13px; }
+  .res-card-nombre { font-size: 13px; }
+
+  /* Los chips de escenario: una fila con scroll propio, sin sacar la página de sitio. */
+  .res-esc-sel {
+    display: flex; flex-wrap: nowrap; max-width: 100%;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; -ms-overflow-style: none;
+  }
+  .res-esc-sel::-webkit-scrollbar { display: none; }
+  .res-esc-sel button { flex: 0 0 auto; white-space: nowrap; }
+
+  .res-umbral { padding: 16px 15px; border-radius: 13px; }
+  .res-barra-pies { font-size: 9px; }
+
+  .res-ajustes { grid-template-columns: 1fr; }
+  .res-ajustes select { font-size: 16px; } /* 16px evita el zoom de iOS al enfocar */
+  #res-tabla td small { font-size: 9px; }
+}
+
+/* ============================================================
+   MODAL — dónde viven tus datos (copia y sincronización)
+   ============================================================ */
+#g-copia-aviso:not(:empty) { margin-bottom: 18px; }
+.g-seccion { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--border2); }
+.g-seccion-tit {
+  font-size: 11px; color: var(--muted); font-weight: 700;
+  text-transform: uppercase; letter-spacing: .1em; margin-bottom: 14px;
+}
+.g-sub {
+  font-size: 12px; color: var(--text); font-weight: 700;
+  margin: 22px 0 4px; padding-top: 16px; border-top: 1px solid var(--border);
+}
+.g-botones { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.g-botones .btn { flex: 1 1 auto; text-align: center; }
+.g-botones .btn[disabled] { opacity: .5; cursor: default; }
+#g-copia-msg:not(:empty), #g-sync-msg:not(:empty) { margin-top: 12px; }
+#g-copia-msg .alerta, #g-sync-msg .alerta { margin-bottom: 0; font-size: 13px; }
+.g-nota-clave { margin-top: 8px; }
+.g-seccion a { color: var(--blue); }
+/* En el modal los inputs son de ancho completo; el de archivo va oculto y lo dispara
+   su botón, así que aquí no ocupa nada. */
+#g-cargar-copia-input { display: none; }
+
+@media (max-width: 640px) {
+  .g-botones .btn { flex: 1 1 100%; }
+}
+
+/* ============================================================
+   Y AHORA QUÉ — la pantalla que abre la app
+   ============================================================
+   Tres respuestas, en este orden visual: dónde estoy (semáforo y alertas), qué hago hoy,
+   y qué viene después (el hito siguiente, el camino y los países). Nada aquí es decorado:
+   el color del semáforo, el grosor del número de ventas y el destacado del camino son la
+   jerarquía de "esto es lo que tienes que mirar primero". */
+
+/* ---------- El semáforo ---------- */
+.dec-semaforo {
+  display: flex; align-items: flex-start; gap: 16px;
+  border: 1px solid var(--border2); border-radius: 20px;
+  background: var(--surface); padding: 26px 28px; margin-bottom: 32px;
+}
+.dec-semaforo.verde {
+  border-color: rgba(0, 200, 150, .45);
+  background: linear-gradient(180deg, var(--green-dim), transparent 70%), var(--surface);
+}
+.dec-semaforo.ambar {
+  border-color: rgba(245, 166, 35, .45);
+  background: linear-gradient(180deg, var(--amber-dim), transparent 70%), var(--surface);
+}
+.dec-semaforo.rojo {
+  border-color: rgba(255, 92, 92, .5);
+  background: linear-gradient(180deg, var(--red-dim), transparent 70%), var(--surface);
+}
+.dec-semaforo-luz { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; margin-top: 9px; background: var(--dim); }
+.dec-semaforo.verde .dec-semaforo-luz { background: var(--green); box-shadow: 0 0 14px var(--green); }
+.dec-semaforo.ambar .dec-semaforo-luz { background: var(--amber); box-shadow: 0 0 14px var(--amber); }
+.dec-semaforo.rojo .dec-semaforo-luz { background: var(--red); box-shadow: 0 0 14px var(--red); }
+.dec-semaforo-txt { min-width: 0; }
+.dec-semaforo-tit {
+  font-size: clamp(21px, 3.4vw, 30px); font-weight: 800;
+  letter-spacing: -.025em; line-height: 1.15;
+}
+.dec-semaforo-exp { margin-top: 10px; font-size: 14.5px; color: var(--muted); line-height: 1.55; max-width: 68ch; }
+
+/* ---------- Qué hago hoy ---------- */
+.dec-hoy { list-style: none; display: grid; gap: 12px; padding: 0; }
+.dec-hoy-item {
+  display: flex; align-items: flex-start; gap: 14px;
+  border: 1px solid var(--border); border-left: 3px solid var(--dim);
+  border-radius: 14px; background: var(--surface); padding: 16px 18px;
+}
+.dec-hoy-item.u-ya { border-left-color: var(--red); }
+.dec-hoy-item.u-este-trimestre { border-left-color: var(--amber); }
+.dec-hoy-item.u-este-ano { border-left-color: var(--blue); }
+.dec-hoy-n {
+  flex: 0 0 26px; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--surface2); color: var(--muted); font-size: 12px;
+  display: flex; align-items: center; justify-content: center; margin-top: 1px;
+}
+.dec-hoy-cuerpo { min-width: 0; }
+.dec-hoy-accion { font-size: 15px; font-weight: 600; line-height: 1.45; }
+.dec-hoy-porque { margin-top: 8px; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+.dec-hoy-etq {
+  display: inline-block; vertical-align: middle; margin-right: 8px;
+  font-size: 9.5px; font-weight: 800; letter-spacing: .09em;
+  padding: 2px 7px; border-radius: 5px; white-space: nowrap;
+  background: var(--surface2); color: var(--muted);
+}
+.dec-hoy-item.u-ya .dec-hoy-etq { background: var(--red-dim); color: var(--red); }
+.dec-hoy-item.u-este-trimestre .dec-hoy-etq { background: var(--amber-dim); color: var(--amber); }
+.dec-hoy-item.u-este-ano .dec-hoy-etq { background: rgba(77, 166, 255, .12); color: var(--blue); }
+
+/* El día que no hay nada que mover, se dice y punto. Una lista vacía no tranquiliza. */
+.dec-nada {
+  border: 1px solid var(--border); border-radius: 16px;
+  background: var(--surface); padding: 28px 24px; text-align: center;
+}
+.dec-nada-tit { font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+.dec-nada-sub { margin-top: 8px; font-size: 14px; font-weight: 600; color: var(--green); }
+
+/* ---------- Las alertas ---------- */
+.dec-alertas { display: grid; gap: 10px; }
+.dec-alerta {
+  display: flex; align-items: flex-start; gap: 12px;
+  border: 1px solid var(--border); border-radius: 13px;
+  background: var(--surface); padding: 13px 16px;
+}
+.dec-alerta.ambar { border-color: rgba(245, 166, 35, .35); background: var(--amber-dim); }
+.dec-alerta.rojo { border-color: rgba(255, 92, 92, .4); background: var(--red-dim); }
+.dec-alerta-punto { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; background: var(--dim); }
+.dec-alerta.verde .dec-alerta-punto { background: var(--green); }
+.dec-alerta.ambar .dec-alerta-punto { background: var(--amber); }
+.dec-alerta.rojo .dec-alerta-punto { background: var(--red); }
+.dec-alerta-txt { flex: 1 1 auto; min-width: 0; font-size: 13.5px; line-height: 1.5; }
+.dec-alerta-dato { flex: 0 0 auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* ---------- El siguiente hito: el bloque más importante ---------- */
+.dec-sig {
+  border: 1px solid var(--border2); border-radius: 20px; padding: 28px;
+  background: linear-gradient(180deg, rgba(0, 200, 150, .05), transparent 45%), var(--surface);
+}
+.dec-sig.ya {
+  border-color: rgba(255, 92, 92, .45);
+  background: linear-gradient(180deg, var(--red-dim), transparent 45%), var(--surface);
+}
+.dec-sig.este-trimestre {
+  border-color: rgba(245, 166, 35, .4);
+  background: linear-gradient(180deg, var(--amber-dim), transparent 45%), var(--surface);
+}
+.dec-sig-eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+.dec-sig-tit {
+  margin-top: 10px; font-size: clamp(19px, 3vw, 26px); font-weight: 800;
+  letter-spacing: -.025em; line-height: 1.2;
+}
+.dec-sig-cifras { display: flex; align-items: flex-end; gap: 30px; flex-wrap: wrap; margin-top: 20px; }
+/* La cifra grande es SIEMPRE la de ventas: es lo único que él controla.
+   Ojo: no siempre es un número corto. Cuando falta un resto diminuto, decisiones.js dice
+   "menos de 0,1" en vez de redondear a 0, y esa frase tiene que poder partirse en dos
+   líneas sin sacar la página de sitio en un iPhone. */
+.dec-sig-big { flex: 0 1 auto; min-width: 0; max-width: 100%; }
+.dec-sig-big span {
+  display: block; font-family: var(--fm); font-variant-numeric: tabular-nums;
+  font-size: clamp(34px, 8vw, 56px); font-weight: 500; line-height: 1.05;
+  letter-spacing: -.03em; color: var(--green);
+}
+.dec-sig-big.sin-dato span { color: var(--amber); }
+.dec-sig-big small,
+.dec-sig-eur small {
+  display: block; margin-top: 9px; font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .08em;
+}
+.dec-sig-eur span {
+  display: block; font-family: var(--fm); font-variant-numeric: tabular-nums;
+  font-size: clamp(20px, 3.6vw, 28px); line-height: 1; letter-spacing: -.02em;
+}
+.dec-sig-ojo { margin-top: 14px; font-size: 12.5px; color: var(--amber); line-height: 1.5; }
+.dec-sig-bloque { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
+.dec-sig-l { font-size: 10.5px; text-transform: uppercase; letter-spacing: .11em; color: var(--muted); margin-bottom: 8px; }
+.dec-sig-quepasa, .dec-sig-quehacer { font-size: 14px; line-height: 1.6; max-width: 70ch; }
+.dec-sig-quehacer { color: var(--text); font-weight: 600; }
+.dec-sig-falta {
+  display: flex; align-items: flex-start; gap: 10px; margin-top: 20px;
+  border: 1px solid var(--amber); background: var(--amber-dim);
+  border-radius: 12px; padding: 12px 14px; font-size: 12.5px; line-height: 1.5;
+}
+.dec-sig-falta svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--amber); margin-top: 1px; }
+
+/* ---------- La barra de progreso hacia el hito ---------- */
+.dec-barra { margin-top: 24px; }
+.dec-barra-track {
+  height: 10px; border-radius: 99px; overflow: hidden;
+  background: var(--surface2); border: 1px solid var(--border);
+}
+.dec-barra-lleno {
+  height: 100%; border-radius: 99px; min-width: 2px;
+  background: linear-gradient(90deg, rgba(0, 200, 150, .45), var(--green));
+  transition: width .6s var(--ease);
+}
+.dec-barra-pies {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; margin-top: 10px; font-size: 11px; color: var(--muted);
+}
+.dec-barra-pct { color: var(--green); font-variant-numeric: tabular-nums; }
+.dec-barra-pie { min-width: 0; }
+.dec-barra-pie.der { text-align: right; }
+
+/* ---------- El camino: línea de tiempo vertical ---------- */
+.dec-camino { list-style: none; position: relative; padding: 0 0 0 34px; margin: 0; }
+.dec-camino::before {
+  content: ''; position: absolute; left: 11px; top: 10px; bottom: 10px;
+  width: 2px; background: var(--border2);
+}
+.dec-paso { position: relative; margin-bottom: 10px; }
+.dec-paso-det { border: 1px solid var(--border); border-radius: 13px; background: var(--surface); }
+.dec-paso.futuro .dec-paso-det { background: transparent; }
+.dec-paso.ahora .dec-paso-det {
+  border-color: rgba(0, 200, 150, .45);
+  background: linear-gradient(180deg, var(--green-dim), transparent 60%), var(--surface);
+}
+.dec-paso-cab {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 16px; cursor: pointer; list-style: none;
+}
+.dec-paso-cab::-webkit-details-marker { display: none; }
+.dec-paso-cab::marker { content: ''; }
+.dec-paso-punto {
+  position: absolute; left: -34px; top: 12px;
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 2px solid var(--border2); background: var(--bg);
+  display: flex; align-items: center; justify-content: center; color: var(--green);
+}
+.dec-paso-punto svg { width: 11px; height: 11px; }
+.dec-paso.hecho .dec-paso-punto { border-color: rgba(0, 200, 150, .5); }
+.dec-paso.ahora .dec-paso-punto { border-color: var(--green); background: var(--green); box-shadow: 0 0 12px var(--green-dim); }
+.dec-paso.futuro .dec-paso-punto { border-color: var(--dim); }
+.dec-paso-tit { flex: 1 1 auto; min-width: 0; font-size: 13.5px; font-weight: 600; line-height: 1.4; }
+.dec-paso.hecho .dec-paso-tit, .dec-paso.futuro .dec-paso-tit { color: var(--muted); }
+.dec-paso.ahora .dec-paso-tit { color: var(--text); }
+.dec-paso-dist {
+  flex: 0 0 auto; margin-left: auto; white-space: nowrap;
+  font-family: var(--fm); font-variant-numeric: tabular-nums;
+  font-size: 11px; color: var(--muted);
+}
+.dec-paso.ahora .dec-paso-dist { color: var(--green); }
+.dec-paso-cuerpo { padding: 2px 16px 16px 16px; }
+.dec-paso-l { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin: 12px 0 6px; }
+.dec-paso-txt { font-size: 13px; line-height: 1.55; max-width: 70ch; }
+.dec-paso-falta { margin-top: 12px; font-size: 12px; color: var(--amber); line-height: 1.5; }
+
+/* ---------- Los cuatro países ---------- */
+.dec-paises-tit { font-size: 15.5px; line-height: 1.55; max-width: 70ch; margin-bottom: 16px; }
+.dec-paises-tit strong { color: var(--green); }
+.dec-paises { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.dec-pais { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); padding: 15px 16px; }
+.dec-pais.gana {
+  border-color: rgba(0, 200, 150, .45);
+  background: linear-gradient(180deg, var(--green-dim), transparent 70%), var(--surface);
+}
+/* Bali por debajo del umbral del visado: no es una opción cara, es que no existe. */
+.dec-pais.bloqueado { opacity: .55; }
+.dec-pais-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 9px; }
+.dec-pais-nombre { font-size: 13px; font-weight: 700; }
+.dec-pais-top .fila-tag { margin-left: 0; }
+.dec-pais-neto { font-family: var(--fm); font-variant-numeric: tabular-nums; font-size: 20px; letter-spacing: -.02em; }
+.dec-pais-nota { margin-top: 7px; }
+.dec-paises-aviso { margin-top: 16px; font-size: 12.5px; color: var(--amber); line-height: 1.55; max-width: 72ch; }
+.dec-paises-cambio { margin-top: 16px; font-size: 14px; line-height: 1.6; max-width: 72ch; }
+.dec-paises-cambio strong { font-family: var(--fm); font-variant-numeric: tabular-nums; color: var(--text); }
+.dec-ir { margin-left: 8px; }
+
+.dec-pie { margin-top: 14px; font-size: 12px; color: var(--dim); line-height: 1.6; max-width: 76ch; }
+
+.vista.activa .dec-semaforo, .vista.activa .dec-sig { animation: fadeUp .5s var(--ease) both; }
+
+/* ---------- Móvil: manda el iPhone (PWA) ---------- */
+@media (max-width: 640px) {
+  #v-decisiones { max-width: 100%; overflow-x: hidden; }
+  #dec-semaforo, #dec-hoy, #dec-alertas, #dec-siguiente, #dec-camino, #dec-paises {
+    max-width: 100%; overflow-x: hidden;
+  }
+
+  .dec-semaforo { padding: 20px 16px; border-radius: 16px; gap: 12px; margin-bottom: 26px; }
+  .dec-semaforo-luz { width: 12px; height: 12px; margin-top: 7px; }
+  .dec-semaforo-exp { font-size: 13.5px; }
+
+  .dec-hoy-item { padding: 14px 14px; gap: 11px; }
+  .dec-hoy-accion { font-size: 14.5px; }
+
+  .dec-alerta { padding: 12px 13px; flex-wrap: wrap; }
+  /* Con poco ancho el dato baja de línea en vez de estrujar el texto. La sangría lo deja
+     alineado con la frase de arriba y no con el punto de color. */
+  .dec-alerta-dato { flex-basis: 100%; margin-left: 21px; }
+
+  .dec-sig { padding: 20px 16px; border-radius: 16px; }
+  .dec-sig-cifras { gap: 20px; }
+  .dec-sig-quepasa, .dec-sig-quehacer { font-size: 13.5px; }
+  /* Los tres pies de la barra no caben en una línea de 390 px con las etiquetas puestas
+     ("ahora · 14.912,87 € al año"). Se reparten en dos filas en vez de desbordar. */
+  .dec-barra-pies {
+    display: grid; grid-template-columns: 1fr auto;
+    gap: 4px 10px; font-size: 10.5px;
+  }
+  .dec-barra-pie { grid-column: 1; }
+  .dec-barra-pct { grid-column: 2; grid-row: 1; text-align: right; }
+  .dec-barra-pie.der { grid-column: 1; grid-row: 2; text-align: left; }
+
+  .dec-camino { padding-left: 28px; }
+  .dec-camino::before { left: 10px; }
+  .dec-paso-punto { left: -28px; top: 12px; width: 18px; height: 18px; }
+  .dec-paso-punto svg { width: 10px; height: 10px; }
+  .dec-paso-cab { padding: 12px 13px; flex-wrap: wrap; gap: 8px; }
+  /* La distancia baja a su propia línea: si no, "2,4 ventas/mes" parte el título. */
+  .dec-paso-dist { flex-basis: 100%; margin-left: 0; }
+  .dec-paso-cuerpo { padding: 2px 13px 14px 13px; }
+
+  .dec-paises { grid-template-columns: 1fr 1fr; }
+  .dec-pais { padding: 13px 13px; }
+  .dec-pais-neto { font-size: 17px; }
+  .dec-ir { display: block; width: 100%; margin: 12px 0 0; }
+}
+
+@media (max-width: 400px) {
+  .dec-paises { grid-template-columns: 1fr; }
+  .dec-sig-cifras { gap: 14px; }
+}
+
+/* ============================================================
+   BALI en "Dónde vivir"
+   ============================================================
+   El visado es un umbral MIGRATORIO y manda sobre el dinero: una cifra estupenda con la
+   que no calificas no es una opción, así que se marca en ámbar y no se deja en verde. */
+.res-card-bloqueo { color: var(--amber); }
+#res-tabla td.res-sin-visado { color: var(--amber); }
+#res-tabla td.res-sin-visado sup { font-size: 9px; margin-left: 1px; }

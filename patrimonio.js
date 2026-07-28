@@ -10,15 +10,19 @@ const TIPOS_CUENTA = ['banco', 'cripto', 'efectivo'];
 const CLASES_OBJETIVO = ['reserva', 'objetivo'];
 
 // Número de usuario: vacío, NaN o basura -> 0. Nunca propaga NaN a la UI.
+// El try no es paranoia: `Number(v)` LANZA un TypeError si v es un objeto con una clave
+// `toString` que no sea función, y eso llega desde una copia de seguridad importada
+// ({"importe": {"toString": 1}} es JSON válido). Ver la nota larga en respaldo.js.
 function num(v) {
-  const n = typeof v === 'number' ? v : Number(v);
+  let n;
+  try { n = typeof v === 'number' ? v : Number(v); } catch (e) { return 0; }
   return Number.isFinite(n) ? n : 0;
 }
 
-// Texto de usuario: recorta espacios; null/undefined -> ''.
+// Texto de usuario: recorta espacios; null/undefined -> ''. Mismo blindaje que num.
 function texto(v) {
   if (v === null || v === undefined) return '';
-  return String(v).trim();
+  try { return String(v).trim(); } catch (e) { return ''; }
 }
 
 // Formato español, igual que formatoEuros. Local a propósito: este módulo solo
