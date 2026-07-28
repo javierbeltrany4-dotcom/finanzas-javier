@@ -2,6 +2,11 @@ import * as C from './calculos.js';
 import * as P from './patrimonio.js';
 import { renderPatrimonio, bindPatrimonio } from './vista-patrimonio.js';
 import { parseTradinverso, cargarTradinverso } from './tradinverso.js';
+import * as O from './objetivo.js';
+// Ojo con el alias: aquí abajo ya existe una función `renderObjetivo` (el objetivo de
+// beneficio del mes, en el Resumen). Dos declaraciones con el mismo nombre romperían
+// el módulo entero, así que la vista de "Cuánto facturar" entra con otro nombre.
+import { renderObjetivo as renderVistaObjetivo, bindObjetivo } from './vista-objetivo.js';
 
 const CACHE_KEY = 'tv-cache-v2';
 const SALDO_KEY = 'saldo-banco-v2';
@@ -9,6 +14,9 @@ const GASTOS_KEY = 'gastos-fijos-v2';
 const META_KEY = 'meta-mensual-v1';
 const PATRIMONIO_KEY = 'patrimonio-v1';
 const IRPF_KEY = 'irpf-v1';
+const MODELO_KEY = 'modelo-objetivo-v1';
+const DUBAI_KEY = 'dubai-v1';
+const OBJETIVO_KEY = 'objetivo-limpio-v1';
 
 let config = null;
 let datos = { ingresos: [], retiros: [], ventas: [], gastosNegocio: [], caja: {} };
@@ -93,6 +101,94 @@ function setPatrimonio(p) { localStorage.setItem(PATRIMONIO_KEY, JSON.stringify(
 // Config de IRPF: porcentaje y listas de conceptos. Editable desde el modal.
 function getIrpf() { const o = localStorage.getItem(IRPF_KEY); return o ? JSON.parse(o) : (config.config.irpf || C.IRPF_DEFAULT); }
 const split = () => config.config.split;
+
+// ---------- Cuánto facturar: modelo del negocio, Dubái y objetivo limpio ----------
+// Tres cosas que el usuario edita y que viven en SU navegador. datos.json es solo la
+// semilla: en cuanto toca algo, manda lo suyo.
+
+// Cuánto quiere quedarse limpio al mes si todavía no lo ha dicho nunca.
+const OBJETIVO_LIMPIO_DEFAULT = 3000;
+const CLAVES_MODELO = Object.keys(O.MODELO_DEFAULT);
+
+// JSON de localStorage sin reventar si dentro hay basura (una versión vieja, un guardado
+// a medias). Ante la duda, null: los getters de abajo caen a datos.json y siguen.
+function leerJSON(clave) {
+  const o = localStorage.getItem(clave);
+  if (!o) return null;
+  try { return JSON.parse(o); } catch (e) { return null; }
+}
+
+// Lo guardado tal cual: localStorage > datos.json > el modelo de fábrica.
+function modeloGuardado() {
+  return leerJSON(MODELO_KEY) || (config && config.config && config.config.modelo) || O.MODELO_DEFAULT;
+}
+
+// ¿Es el modelo de fábrica entero? Es exactamente lo que manda el botón "Volver a los
+// valores por defecto", y por eso es también lo que apaga la bandera de fijos a mano.
+function esModeloPorDefecto(m) {
+  return CLAVES_MODELO.every((k) => Math.abs(m[k] - O.MODELO_DEFAULT[k]) < 0.0001);
+}
+
+// El modelo que ve la pantalla. Los gastos fijos NO son los de fábrica: son la media
+// REAL de los últimos meses de gastos del negocio… salvo que el usuario los haya
+// tecleado a mano. En cuanto toca ese campo se marca `fijosManual` y manda lo suyo.
+function getModelo() {
+  const guardado = modeloGuardado();
+  const m = O.normalizarModelo(guardado);
+  if (guardado && guardado.fijosManual === true) { m.fijosManual = true; return m; }
+  m.fijosNegocio = O.modeloDesdeDatos(datos, m).modelo.fijosNegocio;
+  return m;
+}
+
+function setModelo(m) {
+  const x = O.normalizarModelo(m);
+  const previo = getModelo();
+  // El único campo que enciende la bandera es el de los fijos: si el número que llega no
+  // es el que había en pantalla, lo ha escrito él. Y como getModelo() ya devuelve los
+  // fijos efectivos, editar cualquier otro campo llega aquí con el mismo valor y no la
+  // enciende por error. El modelo de fábrica entero (el reset) la apaga.
+  const manual = !esModeloPorDefecto(x)
+    && (previo.fijosManual === true || Math.abs(x.fijosNegocio - previo.fijosNegocio) > 0.005);
+  if (manual) x.fijosManual = true;
+  localStorage.setItem(MODELO_KEY, JSON.stringify(x));
+}
+
+function getDubai() {
+  return O.normalizarDubai(leerJSON(DUBAI_KEY) || (config && config.config && config.config.dubai) || O.DUBAI_DEFAULT);
+}
+function setDubai(d) { localStorage.setItem(DUBAI_KEY, JSON.stringify(O.normalizarDubai(d))); }
+
+function getObjetivo() {
+  const o = localStorage.getItem(OBJETIVO_KEY);
+  const n = parseFloat(o !== null ? o : (config && config.objetivoLimpio));
+  return Number.isFinite(n) && n >= 0 ? n : OBJETIVO_LIMPIO_DEFAULT;
+}
+function setObjetivo(v) {
+  const n = parseFloat(v);
+  localStorage.setItem(OBJETIVO_KEY, String(Number.isFinite(n) && n > 0 ? n : 0));
+}
+
+// Modelo + ventas medias ya resueltos contra los datos reales de Tradingverso. Lo usan
+// la pestaña "Cuánto facturar" y la reserva de IRPF real de "Mi patrimonio", para que
+// las dos hablen exactamente del mismo negocio.
+function modeloVivo() {
+  const base = getModelo();
+  const d = O.modeloDesdeDatos(datos, base);
+  if (!base.fijosManual) return { modelo: d.modelo, ventasMedia: d.ventasMedia, fuente: d.fuente };
+  // Con los fijos puestos a mano hay que decirlo en la línea de "de dónde salen los
+  // números": se cambia solo la mitad de los fijos y se conserva la de las ventas.
+  const partes = String((d.fuente && d.fuente.texto) || '').split(' · ');
+  const ventas = partes[partes.length - 1] || '';
+  return {
+    modelo: base,
+    ventasMedia: d.ventasMedia,
+    fuente: {
+      ...d.fuente,
+      fijosNegocio: 'manual',
+      texto: `Fijos: los ${f(base.fijosNegocio)} que has puesto tú${ventas ? ` · ${ventas}` : ''}`,
+    },
+  };
+}
 const finDeMes = (ym) => `${ym}-${String(new Date(+ym.slice(0, 4), +ym.slice(5, 7), 0).getDate()).padStart(2, '0')}`;
 
 // ---------- Carga ----------
@@ -715,15 +811,34 @@ function renderVista(v) {
   else if (v === 'retiros') renderRetiros();
   else if (v === 'midinero') renderMiDinero();
   else if (v === 'calendario') renderCalendario();
-  else if (v === 'patrimonio') renderPatrimonio({
-    patrimonio: getPatrimonio(),
-    retiros: datos.retiros,
-    gastosFijosTotal: C.gastoFijoMensual(getGastos()),
-    irpfCfg: getIrpf(),
-    split,
-    f,
-    card,
-  });
+  else if (v === 'patrimonio') {
+    const mv = modeloVivo();
+    renderPatrimonio({
+      patrimonio: getPatrimonio(),
+      retiros: datos.retiros,
+      gastosFijosTotal: C.gastoFijoMensual(getGastos()),
+      irpfCfg: getIrpf(),
+      split,
+      f,
+      card,
+      // La reserva de impuestos que ya había usa el IRPF PLANO de los retiros hechos.
+      // Con esto la vista puede ofrecer además el REAL, el de tramos, sobre las ventas
+      // medias del negocio: es el número que dice si hay que apartar o si devuelven.
+      modeloObjetivo: mv.modelo,
+      ventasMedia: mv.ventasMedia,
+    });
+  } else if (v === 'objetivo') {
+    const mv = modeloVivo();
+    renderVistaObjetivo({
+      modelo: mv.modelo,
+      dubai: getDubai(),
+      ventasMedia: mv.ventasMedia,
+      objetivo: getObjetivo(),
+      fuente: mv.fuente,
+      f,
+      card,
+    });
+  }
   postRender(v);
 }
 function cambiarVista(v) {
@@ -784,8 +899,11 @@ function exportarJSON() {
   const out = {
     ...config,
     saldoBanco: getSaldo(),
-    config: { ...config.config, gastosFijos: getGastos(), irpf: getIrpf() },
+    // El modelo viaja con su bandera `fijosManual`: si el usuario tecleó los fijos, esa
+    // decisión tiene que sobrevivir al viaje por GitHub, no perderse por el camino.
+    config: { ...config.config, gastosFijos: getGastos(), irpf: getIrpf(), modelo: getModelo(), dubai: getDubai() },
     patrimonio: getPatrimonio(),
+    objetivoLimpio: getObjetivo(),
   };
   const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -831,6 +949,11 @@ function bind() {
   });
   // Patrimonio: se engancha una sola vez (bindPatrimonio ya se protege con dataset).
   bindPatrimonio({ getPatrimonio, setPatrimonio, rerender: () => renderVista('patrimonio') });
+  // Cuánto facturar: igual, una sola vez (bindObjetivo también se protege con dataset).
+  bindObjetivo({
+    getModelo, setModelo, getDubai, setDubai, getObjetivo, setObjetivo,
+    rerender: () => renderVista('objetivo'),
+  });
   document.getElementById('cal-mes').addEventListener('change', renderCalendario);
   document.getElementById('cal-fecha').addEventListener('change', renderCalendario);
   document.getElementById('cal-grid').addEventListener('click', (e) => {

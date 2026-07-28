@@ -12,15 +12,19 @@ import {
   sugerenciaGastosFijos,
 } from './patrimonio.js';
 import { formatoEuros, IRPF_DEFAULT, SPLIT } from './calculos.js';
+import { irpfAnualReal } from './objetivo.js';
 
 // Nombres exactos de las reservas sugeridas: si existen, el botón desaparece.
 const NOMBRE_IMPUESTOS = 'Impuestos IRPF';
 const NOMBRE_GASTOS = 'Gastos fijos mes siguiente';
+// La reserva del IRPF real lleva nombre propio: convive con la de arriba sin pisarla.
+const NOMBRE_IMPUESTOS_REAL = 'IRPF real del año';
 
 const TIPOS_CUENTA = [['banco', 'Banco'], ['cripto', 'Cripto'], ['efectivo', 'Efectivo']];
 const CLASES_OBJETIVO = [['reserva', 'Reserva'], ['objetivo', 'Objetivo']];
 
 const ICON_WARN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+const ICON_OK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
 
 // Los nombres de cuentas y objetivos los escribe el usuario: sin escapar, un nombre
 // con < o " rompe el render (o inyecta HTML). Todo texto de usuario pasa por aquí.
@@ -129,6 +133,43 @@ function tieneObjetivo(objetivos, nombre) {
   return objetivos.some((o) => String(o.nombre || '').trim().toLowerCase() === buscado);
 }
 
+// El IRPF de verdad, no el plano.
+//
+// La sugerencia de arriba reserva el IRPF PLANO de los retiros ya hechos: un porcentaje
+// fijo, el mismo para el primer euro que para el último. Pero el IRPF español va por
+// tramos, así que ese número casi nunca es el que Hacienda va a pedir.
+//
+// Aquí se calcula el REAL sobre las ventas medias del negocio y salen dos caminos
+// opuestos, y hay que enseñar el que toque sin rodeos:
+//   · te retienen de MENOS -> falta dinero: botón para reservar el IRPF real del año;
+//   · te retienen de MÁS   -> Hacienda devuelve: aviso verde y ningún botón, porque no
+//     hay nada que apartar. Este es el dato que más tranquiliza y no se puede esconder.
+function bloqueIrpfReal(objetivos, ctx, f) {
+  const vacio = { aviso: '', boton: '' };
+  if (!ctx || !ctx.modeloObjetivo) return vacio;
+
+  const a = irpfAnualReal(ctx.modeloObjetivo, ctx.ventasMedia || 0);
+  if (!Number.isFinite(a.irpfReal) || !Number.isFinite(a.diferencia)) return vacio;
+
+  // Hacienda devuelve: nada que reservar, y se dice con todas las letras.
+  if (a.diferencia > 0) {
+    return {
+      aviso: `<div class="alerta ok">${ICON_OK}<span>Vas pagando de más: Hacienda debería devolverte <strong>${f(a.diferencia)}</strong>.
+        <span class="mc">Te retienes ${f(a.irpfRetenido)} al año y el IRPF real por tramos son ${f(a.irpfReal)}. No tienes que reservar nada extra: ese dinero ya es tuyo, solo que no lo ves hasta la declaración.</span></span></div>`,
+      boton: '',
+    };
+  }
+
+  // Ni base imponible, o la reserva ya está creada: no se insiste.
+  if (!(a.irpfReal > 0) || tieneObjetivo(objetivos, NOMBRE_IMPUESTOS_REAL)) return vacio;
+
+  return {
+    aviso: '',
+    boton: `<button type="button" class="btn btn-ghost" id="pat-sug-impuestos-real" data-importe="${a.irpfReal}"
+      title="Te retienes ${f(a.irpfRetenido)} al año y el IRPF real por tramos son ${f(a.irpfReal)}: te faltan ${f(-a.diferencia)}.">Reservar ${f(a.irpfReal)} — IRPF real estimado del año</button>`,
+  };
+}
+
 function pintarAvisos(e, objetivos, ctx, f) {
   let html = '';
   // Sobreasignado: rojo y con el exceso exacto. estadoPatrimonio lo mete como primer
@@ -139,6 +180,10 @@ function pintarAvisos(e, objetivos, ctx, f) {
   const resto = e.sobreasignado ? e.avisos.slice(1) : e.avisos;
   html += resto.map((a) => `<div class="aviso-ambar">${ICON_WARN}<span>${esc(a)}</span></div>`).join('');
 
+  // El IRPF real del año: o un aviso verde (devuelven) o un botón (falta dinero).
+  const real = bloqueIrpfReal(objetivos, ctx, f);
+  html += real.aviso;
+
   // Sugerencias: el sistema propone importes, el usuario decide. Son botones, nunca
   // se aplican solos. El importe viaja en data-importe porque bindPatrimonio no ve el ctx.
   const botones = [];
@@ -146,6 +191,7 @@ function pintarAvisos(e, objetivos, ctx, f) {
     const imp = sugerenciaImpuestos(ctx.retiros || [], ctx.irpfCfg || IRPF_DEFAULT, splitDe(ctx));
     botones.push(`<button type="button" class="btn btn-ghost" id="pat-sug-impuestos" data-importe="${imp}">Reservar ${f(imp)} para impuestos</button>`);
   }
+  if (real.boton) botones.push(real.boton);
   if (!tieneObjetivo(objetivos, NOMBRE_GASTOS)) {
     const imp = sugerenciaGastosFijos(ctx.gastosFijosTotal);
     botones.push(`<button type="button" class="btn btn-ghost" id="pat-sug-gastos" data-importe="${imp}">Reservar ${f(imp)} para los gastos fijos del mes que viene</button>`);
@@ -269,6 +315,8 @@ export function bindPatrimonio(handlers) {
       handlers.rerender();
     } else if (btn.id === 'pat-sug-impuestos') {
       anadirReserva(NOMBRE_IMPUESTOS, parseFloat(btn.dataset.importe) || 0);
+    } else if (btn.id === 'pat-sug-impuestos-real') {
+      anadirReserva(NOMBRE_IMPUESTOS_REAL, parseFloat(btn.dataset.importe) || 0);
     } else if (btn.id === 'pat-sug-gastos') {
       anadirReserva(NOMBRE_GASTOS, parseFloat(btn.dataset.importe) || 0);
     }

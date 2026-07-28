@@ -478,3 +478,342 @@ th.col-irpf { color: var(--amber); opacity: .8; }
   #v-retiros .filtros .mc { flex: 0 0 auto; }
   #v-retiros .filtros #filtro-limpiar { flex: 1 1 100%; }
 }
+
+/* ============================================================
+   CUÁNTO FACTURAR (vista objetivo)
+   ============================================================ */
+
+/* ---------- Objetivo inverso: "quiero quedarme limpio con X" ---------- */
+/* Caja que envuelve el input grande y los botones rápidos. */
+.obj-meta {
+  border: 1px solid var(--border); border-radius: 18px;
+  background: linear-gradient(180deg, rgba(0, 200, 150, 0.05), transparent 45%), var(--surface);
+  padding: 24px 22px;
+}
+.obj-meta-label {
+  font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .1em; text-align: center; margin-bottom: 14px;
+}
+
+/* El input grande del objetivo: mono, centrado, se ilumina en verde al enfocar. */
+.obj-meta-input {
+  display: block; width: 100%; max-width: 420px; margin: 0 auto;
+  font-family: var(--fm); font-variant-numeric: tabular-nums;
+  font-size: 32px; font-weight: 500; letter-spacing: -.02em; text-align: center;
+  line-height: 1.2; padding: 14px 16px;
+  border: 1px solid var(--border2); border-radius: 14px;
+  background: var(--surface2); color: var(--text);
+  appearance: textfield; -moz-appearance: textfield;
+  transition: border-color .2s var(--ease), box-shadow .2s var(--ease), color .2s var(--ease);
+}
+.obj-meta-input::-webkit-outer-spin-button,
+.obj-meta-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.obj-meta-input::placeholder { color: var(--dim); }
+.obj-meta-input:hover { border-color: var(--border2); }
+.obj-meta-input:focus {
+  outline: none;
+  border-color: var(--green); color: var(--green);
+  box-shadow: 0 0 0 3px var(--green-dim);
+}
+
+/* Fila de atajos: 1000 · 2000 · 3000 · 5000 · 10000. */
+.obj-rapidos {
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px; flex-wrap: wrap; margin-top: 14px;
+}
+.obj-rapido {
+  flex: 0 0 auto; font-family: var(--fm); font-variant-numeric: tabular-nums;
+  font-size: 12px; font-weight: 500; white-space: nowrap;
+  padding: 8px 14px; border-radius: 999px;
+  border: 1px solid var(--border2); background: transparent; color: var(--muted);
+  cursor: pointer;
+  transition: color .2s var(--ease), background .2s var(--ease), border-color .2s var(--ease), transform .2s var(--ease);
+}
+.obj-rapido:hover { color: var(--text); background: var(--surface2); }
+.obj-rapido:active { transform: scale(.96); }
+.obj-rapido.on { color: var(--green); border-color: var(--green); background: var(--green-dim); }
+
+/* Resultado de la inversa, debajo del input. */
+.obj-resultado { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border); text-align: center; }
+.obj-resultado .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.obj-resultado .v {
+  font-family: var(--fm); font-variant-numeric: tabular-nums;
+  font-size: clamp(30px, 6vw, 44px); font-weight: 500; letter-spacing: -.03em;
+  color: var(--green); line-height: 1.1; margin-top: 6px;
+}
+.obj-resultado .mc { display: block; margin-top: 8px; }
+.obj-resultado.imposible .v { color: var(--red); font-size: clamp(20px, 4vw, 26px); }
+
+/* ---------- Cascada: de dónde sale cada euro ---------- */
+.casc {
+  border: 1px solid var(--border); border-radius: 16px;
+  background: var(--surface); overflow: hidden;
+}
+.casc-fila {
+  display: grid; grid-template-columns: 1fr auto 62px;
+  gap: 14px; align-items: baseline;
+  padding: 11px 18px; border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.casc-fila:last-child { border-bottom: none; }
+.casc-fila .cpt { min-width: 0; color: var(--text); }
+.casc-fila .cpt small { display: block; font-size: 11px; color: var(--muted); line-height: 1.35; }
+.casc-fila .imp {
+  font-family: var(--fm); font-variant-numeric: tabular-nums;
+  text-align: right; white-space: nowrap;
+}
+.casc-fila .pct {
+  font-family: var(--fm); font-variant-numeric: tabular-nums;
+  text-align: right; white-space: nowrap; font-size: 11px; color: var(--dim);
+}
+
+/* Lo que se va: en rojo y con un guion delante del importe. */
+.casc-resta .cpt { color: var(--muted); }
+.casc-resta .imp { color: var(--red); }
+.casc-resta .imp::before { content: '-'; margin-right: 3px; }
+
+/* Hitos intermedios (neto, beneficio, mi parte): destacados. */
+.casc-hito {
+  background: var(--green-dim);
+  border-top: 1px solid var(--border2);
+  font-weight: 600;
+}
+.casc-hito .cpt { color: var(--text); font-weight: 700; }
+.casc-hito .imp { font-size: 15px; }
+.casc-hito .pct { color: var(--muted); }
+
+/* La fila del bolsillo: la más destacada de todas. */
+.casc-final {
+  background: linear-gradient(180deg, var(--green-dim), transparent), var(--surface2);
+  border-top: 1px solid var(--green);
+  padding-top: 16px; padding-bottom: 16px;
+}
+.casc-final .cpt { font-size: 14px; font-weight: 800; color: var(--text); }
+.casc-final .imp {
+  font-size: clamp(20px, 4vw, 26px); font-weight: 500;
+  letter-spacing: -.02em; color: var(--green);
+}
+.casc-final .pct { color: var(--green); opacity: .75; }
+.casc-final.negativo { border-top-color: var(--red); background: linear-gradient(180deg, var(--red-dim), transparent), var(--surface2); }
+.casc-final.negativo .imp, .casc-final.negativo .pct { color: var(--red); }
+
+/* ---------- La escalera ---------- */
+/* Fila "AHORA" (ámbar) y fila "TU META" (verde). */
+#obj-escalera tr.hoy td { background: var(--amber-dim); }
+#obj-escalera tr.meta td { background: var(--green-dim); }
+#obj-escalera tr.hoy:hover td { background: var(--amber-dim); }
+#obj-escalera tr.meta:hover td { background: var(--green-dim); }
+
+/* Etiqueta lateral de la fila. */
+.fila-tag {
+  font-size: 10px; letter-spacing: .08em;
+  display: inline-block; vertical-align: middle;
+  font-family: var(--fh); font-weight: 800; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 5px; margin-left: 8px;
+  white-space: nowrap; line-height: 1.5;
+}
+tr.hoy .fila-tag, .fila-tag.ahora { background: var(--amber-dim); color: var(--amber); }
+tr.meta .fila-tag, .fila-tag.meta { background: var(--green-dim); color: var(--green); }
+
+/* Columna del "por venta adicional" en la escalera. */
+td.col-extra, th.col-extra { color: var(--muted); }
+td.col-extra { color: var(--green); }
+
+/* ---------- Palancas: qué mover primero ---------- */
+.palanca {
+  display: flex; flex-direction: column; gap: 6px;
+  border: 1px solid var(--border); border-radius: 16px;
+  background: var(--surface); padding: 18px 20px;
+  transition: border-color .2s var(--ease), transform .2s var(--ease);
+}
+.palanca:hover { border-color: var(--border2); transform: translateY(-2px); }
+.palanca-nombre { font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+.palanca-detalle { font-size: 12px; color: var(--muted); line-height: 1.45; }
+.palanca-valor {
+  font-family: var(--fm); font-variant-numeric: tabular-nums;
+  font-size: 21px; letter-spacing: -.02em; margin-top: 6px;
+}
+/* El incremento: verde si sube, rojo si baja. */
+.palanca-delta {
+  font-family: var(--fm); font-variant-numeric: tabular-nums;
+  font-size: 13px; font-weight: 600; color: var(--green);
+}
+.palanca-delta.sube { color: var(--green); }
+.palanca-delta.baja, .palanca-delta.neg { color: var(--red); }
+.palanca.top { border-color: rgba(0, 200, 150, .4); background: linear-gradient(180deg, var(--green-dim), transparent 60%), var(--surface); }
+
+/* ---------- Ajustes del modelo ---------- */
+.obj-ajustes {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px;
+  border: 1px solid var(--border); border-radius: 16px;
+  background: var(--surface); padding: 20px;
+}
+.obj-ajuste { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.obj-ajuste label { font-size: 11px; color: var(--muted); line-height: 1.35; }
+.obj-ajuste input {
+  width: 100%; min-width: 0;
+  font-family: var(--fm); font-variant-numeric: tabular-nums; font-size: 14px; text-align: right;
+  padding: 9px 11px; border: 1px solid var(--border2); border-radius: 9px;
+  background: var(--surface2); color: var(--text);
+  transition: border-color .2s var(--ease), box-shadow .2s var(--ease);
+}
+.obj-ajuste input:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px var(--green-dim); }
+.obj-ajustes-pie { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.obj-fuente { font-size: 11px; color: var(--dim); line-height: 1.45; }
+
+/* ---------- Móvil: manda el iPhone (PWA) ---------- */
+@media (max-width: 640px) {
+  #v-objetivo { max-width: 100%; overflow-x: hidden; }
+  #obj-inversa, #obj-cascada, #obj-palancas, #obj-ajustes { max-width: 100%; overflow-x: hidden; }
+
+  .obj-meta { padding: 16px 14px; border-radius: 15px; }
+  .obj-meta-input { font-size: 26px; padding: 12px 12px; max-width: 100%; border-radius: 12px; }
+  .obj-resultado { margin-top: 16px; padding-top: 14px; }
+
+  /* Atajos: una sola fila con scroll horizontal, sin sacar la página de sitio. */
+  .obj-rapidos {
+    flex-wrap: nowrap; justify-content: flex-start;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    margin: 14px -14px 0; padding: 2px 14px 6px;
+    scrollbar-width: none; -ms-overflow-style: none;
+  }
+  .obj-rapidos::-webkit-scrollbar { display: none; }
+  .obj-rapido { flex: 0 0 auto; padding: 8px 13px; }
+
+  /* Cascada a 2 columnas: se esconde el %. */
+  .casc-fila { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 10px 14px; font-size: 12.5px; }
+  .casc-fila .pct { display: none; }
+  .casc-fila .cpt { word-break: break-word; }
+  .casc-fila .cpt small { font-size: 10.5px; }
+  .casc-hito .imp { font-size: 14px; }
+  .casc-final { padding-top: 14px; padding-bottom: 14px; }
+  .casc-final .cpt { font-size: 13px; }
+  .casc-final .imp { font-size: 22px; }
+
+  .fila-tag { font-size: 9px; padding: 1px 5px; margin-left: 6px; }
+
+  .palanca { padding: 14px 15px; border-radius: 13px; }
+  .palanca-nombre { font-size: 13px; }
+  .palanca-detalle { font-size: 11.5px; }
+  .palanca-valor { font-size: 18px; }
+
+  .obj-ajustes { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 14px; }
+  .obj-ajuste input { font-size: 16px; } /* 16px evita el zoom de iOS */
+  .obj-ajustes-pie .btn { flex: 1 1 100%; }
+}
+@media (max-width: 400px) {
+  .obj-ajustes { grid-template-columns: 1fr; }
+  .obj-meta-input { font-size: 24px; }
+}
+
+/* ============================================================
+   CUÁNTO FACTURAR — IRPF real, España/Dubái y remates
+   (añadidos: no toca nada de lo de arriba)
+   ============================================================ */
+
+/* ---------- Inversa: la respuesta y su contexto ---------- */
+.obj-meta-pie { display: block; text-align: center; margin-top: 10px; }
+.obj-cards { margin-top: 18px; }
+.obj-cards .card.acento { border-color: rgba(0, 200, 150, .4); }
+.obj-cards .card.acento .v {
+  font-size: clamp(30px, 6vw, 42px); color: var(--green);
+  line-height: 1.05; font-weight: 500;
+}
+.obj-contexto {
+  margin-top: 14px; text-align: center;
+  font-size: 13px; color: var(--muted); line-height: 1.5;
+}
+.obj-contexto strong { color: var(--amber); font-family: var(--fm); }
+
+/* Notas sueltas bajo un bloque (punto muerto, venta extra, quién gana). */
+.obj-notas { display: flex; flex-wrap: wrap; gap: 8px 28px; margin-top: 14px; }
+.obj-nota { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.obj-nota strong { font-family: var(--fm); font-variant-numeric: tabular-nums; color: var(--text); }
+#obj-palancas-nota { margin-top: 14px; }
+
+/* ---------- Dos cifras enfrentadas (retenido/real, España/Dubái) ---------- */
+.obj-duo { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: stretch; }
+.obj-duo-col {
+  border: 1px solid var(--border); border-radius: 16px;
+  background: var(--surface); padding: 20px;
+  transition: border-color .2s var(--ease);
+}
+.obj-duo-col .l {
+  font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .08em; margin-bottom: 10px;
+}
+.obj-duo-col .v {
+  font-family: var(--fm); font-variant-numeric: tabular-nums;
+  font-size: clamp(22px, 4.5vw, 30px); letter-spacing: -.02em; line-height: 1.1;
+}
+.obj-duo-col .mc { display: block; margin-top: 8px; line-height: 1.45; }
+.obj-duo-col.gana {
+  border-color: rgba(0, 200, 150, .4);
+  background: linear-gradient(180deg, var(--green-dim), transparent 60%), var(--surface);
+}
+.obj-duo-col.gana .v { color: var(--green); }
+.obj-duo-vs {
+  align-self: center; font-size: 10px; font-weight: 700; color: var(--dim);
+  text-transform: uppercase; letter-spacing: .12em;
+}
+
+/* ---------- El veredicto: la frase que hay que leer sí o sí ---------- */
+.obj-veredicto {
+  margin-top: 14px; padding: 18px 20px; border-radius: 16px;
+  border: 1px solid var(--border2); background: var(--surface);
+  font-size: clamp(16px, 3.2vw, 21px); font-weight: 700; letter-spacing: -.01em; line-height: 1.3;
+}
+.obj-veredicto .mc { display: block; margin-top: 8px; font-weight: 400; line-height: 1.45; }
+.obj-veredicto.ok { border-color: rgba(0, 200, 150, .5); background: var(--green-dim); color: var(--green); }
+.obj-veredicto.mal { border-color: var(--red); background: var(--red-dim); color: var(--red); }
+.obj-veredicto.ok .mc, .obj-veredicto.mal .mc { color: var(--muted); }
+
+/* El punto de cruce de Dubái: en grande, porque es LA cifra del bloque. */
+.obj-cruce {
+  margin-top: 14px; padding: 20px 22px; border-radius: 16px;
+  border: 1px dashed var(--border2); background: var(--surface);
+}
+.obj-cruce .l {
+  display: block; font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .1em; margin-bottom: 8px;
+}
+.obj-cruce .v { display: block; font-size: clamp(17px, 3.4vw, 23px); font-weight: 700; letter-spacing: -.01em; line-height: 1.3; }
+.obj-cruce .v strong { font-family: var(--fm); font-variant-numeric: tabular-nums; color: var(--green); }
+.obj-cruce .mc { display: block; margin-top: 10px; line-height: 1.5; }
+
+/* ---------- Tablas pequeñas de los dos bloques nuevos ---------- */
+.obj-mini { margin-top: 16px; }
+#obj-irpf .grid { margin-top: 16px; }
+.obj-explica { margin-top: 12px; line-height: 1.55; max-width: 72ch; }
+#obj-dubai tr.meta td, #obj-dubai tr.meta:hover td { background: var(--green-dim); }
+#obj-irpf tr.hoy td, #obj-irpf tr.hoy:hover td,
+#obj-dubai tr.hoy td, #obj-dubai tr.hoy:hover td { background: var(--amber-dim); }
+
+/* ---------- Ajustes: filas etiqueta + importe ---------- */
+.pat-fila label { flex: 1 1 150px; min-width: 0; font-size: 12px; color: var(--muted); line-height: 1.35; }
+.obj-ajustes .pat-fila { margin-bottom: 0; }
+.obj-ajustes-tit {
+  grid-column: 1 / -1; font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .12em; color: var(--muted);
+}
+.obj-ajustes-dubai { margin-top: 18px; margin-bottom: 18px; }
+
+/* La palanca que más paga: mismo destacado que .palanca.top. */
+.palanca.acento {
+  border-color: rgba(0, 200, 150, .4);
+  background: linear-gradient(180deg, var(--green-dim), transparent 60%), var(--surface);
+}
+
+/* ---------- Móvil: manda el iPhone (PWA) ---------- */
+@media (max-width: 640px) {
+  #obj-irpf, #obj-dubai { max-width: 100%; overflow-x: hidden; }
+  .obj-duo { grid-template-columns: 1fr; gap: 8px; }
+  .obj-duo-col { padding: 16px 15px; border-radius: 13px; }
+  .obj-duo-vs { justify-self: center; }
+  .obj-veredicto { padding: 15px 16px; border-radius: 13px; }
+  .obj-cruce { padding: 16px 15px; border-radius: 13px; }
+  .obj-notas { gap: 6px 0; flex-direction: column; }
+  .obj-cards { margin-top: 14px; }
+  .pat-fila label { flex: 1 1 auto; width: 100%; }
+  .obj-ajustes-dubai { grid-template-columns: 1fr; }
+}

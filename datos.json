@@ -13,8 +13,25 @@
       { "nombre": "Gimnasio", "importe": 27, "diaPago": 1 },
       { "nombre": "Asesoría", "importe": 75, "diaPago": 1 },
       { "nombre": "Cuota autónomo", "importe": 80, "diaPago": 1 }
-    ]
+    ],
+    "modelo": {
+      "ticket": 1497,
+      "iva": 21,
+      "comisionPct": 1.49,
+      "fijosNegocio": 549.42,
+      "miShare": 40,
+      "cuotaAutonomo": 80,
+      "deducibles": 75,
+      "gastosPersonales": 27,
+      "irpf": 20
+    },
+    "dubai": {
+      "costeAnual": 10000,
+      "impuestoSociedades": 9,
+      "minimoExento": 94000
+    }
   },
   "saldoBanco": { "importe": 0, "fechaActualizacion": "2026-06-21" },
-  "patrimonio": { "cuentas": [], "objetivos": [] }
+  "patrimonio": { "cuentas": [], "objetivos": [] },
+  "objetivoLimpio": 3000
 }
