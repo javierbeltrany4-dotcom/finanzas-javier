@@ -34,6 +34,7 @@ import {
   netoDe,
   compararTodos,
   umbralDetalle,
+  planMudanzaParaguay,
 } from './residencia.js';
 import {
   COSTES_BALI,
@@ -198,9 +199,17 @@ let ctxUltimo = null;
 
 // Deja el ctx en un estado en el que ninguna función de abajo puede recibir basura.
 //
-// ctx = { beneficioAnual, opciones, f, card } — más, opcionalmente, `modelo` y
-// `ventasMedia`, que son lo que hace falta para traducir los umbrales a ventas al mes.
-// Sin ellos la pantalla funciona igual: se calla la línea de ventas en vez de inventarla.
+// ctx = { beneficioAnual, opciones, f, card } — más, opcionalmente, `modelo`,
+// `ventasMedia` (lo que hace falta para traducir los umbrales a ventas al mes) y
+// `devengadoAnual`. Sin ellos la pantalla funciona igual: se calla esas líneas en vez de
+// inventarlas.
+//
+// QUÉ ES `beneficioAnual` AQUÍ, porque estaba mal y es la premisa de toda la pantalla: es
+// lo que él FACTURA al año, no su 40 % del beneficio del negocio. Comparar países es
+// comparar SU tributación, y un autónomo español tributa por lo que factura. Con el
+// beneficio del negocio esta pantalla comparaba escenarios sobre 18.234 € de renta que él
+// no declara, y los umbrales de Paraguay (15.000) y Dubái (33.000) salían a distancias que
+// no son las suyas. `devengadoAnual` viaja al lado solo para poder decirlo en voz alta.
 function prepararCtx(ctx) {
   const c = ctx || {};
   const real = Math.max(0, num(c.beneficioAnual, 0));
@@ -209,6 +218,7 @@ function prepararCtx(ctx) {
     beneficioReal: real,
     beneficio: beneficioManual === null ? real : Math.max(0, beneficioManual),
     manual: beneficioManual !== null,
+    devengadoAnual: Math.max(0, num(c.devengadoAnual, 0)),
     opciones: normalizarOpciones(bruto),
     // La horquilla de Dubái no es una opción de cálculo (residencia.js usa un único coste):
     // es el rango del informe, y de su punto medio sale el coste que sí se calcula. Viaja
@@ -235,7 +245,7 @@ function escenarioActivo(c, filas) {
 }
 
 // ---------------------------------------------------------------------------
-// A) Tu beneficio anual
+// A) Lo que facturas al año
 // ---------------------------------------------------------------------------
 // Se parte en formulario y resultado: el input no se repinta nunca mientras se escribe,
 // o el usuario perdería el foco a mitad de cifra (mismo motivo que en vista-objetivo.js).
@@ -250,14 +260,31 @@ function pintarMioForm(c) {
     ? `<button type="button" class="btn btn-ghost" id="res-beneficio-reset">Volver a mi cifra real (${eurosCortos(c.beneficioReal)})</button>`
     : '';
 
+  // Al mes o al año: el mismo número por doce. Él piensa en meses («este mes me llevé X»)
+  // y todo lo fiscal va en años, así que la pantalla acepta las dos y enseña siempre las dos.
+  const alMes = periodoMensual;
+  const valor = alMes ? c.beneficio / 12 : c.beneficio;
+  const otra = alMes ? c.beneficio : c.beneficio / 12;
+
   return `<div id="res-mio-res"></div>
     <div class="res-probar">
-      <label class="res-probar-l" for="res-beneficio">Probar otra cifra de beneficio anual</label>
-      <input id="res-beneficio" class="res-probar-input" type="number" inputmode="decimal" step="500" min="0"
-        value="${esc(paraInput(c.beneficio))}" placeholder="15000" aria-label="Beneficio anual en euros" />
+      <label class="res-probar-l" for="res-beneficio">Probar otra cifra que ganes tú</label>
+      <div class="seg res-periodo" id="res-periodo">
+        <button type="button" data-periodo="mes"${alMes ? ' class="on"' : ''}>Al mes</button>
+        <button type="button" data-periodo="anio"${alMes ? '' : ' class="on"'}>Al año</button>
+      </div>
+      <input id="res-beneficio" class="res-probar-input" type="number" inputmode="decimal"
+        step="${alMes ? 50 : 500}" min="0"
+        value="${esc(paraInput(valor))}" placeholder="${alMes ? '780' : '9340'}"
+        aria-label="Lo que ganas tú, ${alMes ? 'al mes' : 'al año'}, en euros" />
+      <p class="mc res-equivale">Son <strong>${euros(c.f, otra)}</strong> ${alMes ? 'al año' : 'al mes'}.</p>
       <div class="obj-rapidos">${rapidos}${volver}</div>
     </div>`;
 }
+
+// Periodo elegido en el selector. Vive a nivel de módulo, como el modo de la cascada:
+// sobrevive a los repintados y no se pierde al escribir.
+let periodoMensual = false;
 
 function pintarMioRes(c) {
   const { f, card } = c;
@@ -267,10 +294,10 @@ function pintarMioRes(c) {
   const diferencia = mejor && espana ? mejor.neto - espana.neto : 0;
 
   const pie = c.manual
-    ? `Cifra de prueba. La tuya real, la que sale de tus ventas y gastos de este año proyectados a doce meses, es ${euros(f, c.beneficioReal)}.`
+    ? `Cifra de prueba. La tuya real, la que sale de los retiros que has facturado este año proyectados a doce meses, es ${euros(f, c.beneficioReal)}.`
     : (c.beneficioReal > 0
-      ? 'Tu parte del beneficio del negocio de lo que va de año, proyectada a doce meses. Es antes de cuota de autónomo e impuestos: eso lo resta cada escenario a su manera. La asesoría no está descontada aquí.'
-      : 'Todavía no hay datos del año en curso con los que calcular tu beneficio. Prueba una cifra a mano aquí abajo y la pantalla entera se recalcula.');
+      ? 'Lo que TÚ facturas: tus retiros de lo que va de año, proyectados a doce meses. Es antes de cuota de autónomo e impuestos: eso lo resta cada escenario a su manera. La asesoría no está descontada aquí.'
+      : 'Todavía no hay retiros de este año con los que calcular lo que facturas. Prueba una cifra a mano aquí abajo y la pantalla entera se recalcula.');
 
   const tarjetas = [
     card('Si te quedas como estás', `<span class="num">${euros(f, espana ? espana.neto : NaN)}</span>`, 'autónomo en España, con esta comunidad'),
@@ -278,12 +305,30 @@ function pintarMioRes(c) {
     card('La diferencia', `<span class="num ${diferencia >= 0 ? 'pos' : 'neg'}">${euros(f, diferencia)}</span>`, 'al año, solo impuestos y estructura'),
   ].join('');
 
-  return `<div class="res-mio">
-      <div class="res-mio-l">Tu beneficio anual</div>
+  return `${avisoFacturado(c)}<div class="res-mio">
+      <div class="res-mio-l">Tu facturación, proyectada a doce meses</div>
       <div class="res-mio-v num">${euros(f, c.beneficio)}</div>
       <div class="res-mio-pie mc">${pie}</div>
     </div>
     <div class="grid grid-3 res-mio-cards">${tarjetas}</div>`;
+}
+
+// EL aviso que sostiene toda esta pantalla, y va arriba del todo por eso mismo.
+//
+// La comparación entre países es sobre SU tributación como autónomo español, y un autónomo
+// tributa por lo que factura. El negocio no se muda con él: sigue siendo la empresa alemana
+// de su socio, con sus impuestos, esté él donde esté. Confundir las dos cosas es lo que
+// hacía que esta pantalla comparara escenarios sobre 18.234 € de renta que él no declara.
+function avisoFacturado(c) {
+  const { f } = c;
+  const cifra = c.manual ? c.beneficioReal : c.beneficio;
+  const conDevengado = c.devengadoAnual > cifra + 1
+    ? ` Tu 40 % del beneficio del negocio proyecta ${euros(f, c.devengadoAnual)} al año, pero eso no es renta tuya mientras no lo factures.`
+    : '';
+  const conPrueba = c.manual
+    ? ` Ahora mismo estás probando ${euros(f, c.beneficio)}, que no es tu cifra.`
+    : '';
+  return avisoAmbar(`Esta comparación usa lo que TÚ facturas (${euros(f, cifra)} al año), no el beneficio del negocio. Si te mudas, lo que cambia es tu tributación, no la del negocio de tu socio.${conDevengado}${conPrueba}`, 'res-aviso');
 }
 
 // ---------------------------------------------------------------------------
@@ -320,7 +365,7 @@ function pintarRanking(c) {
       : `no te queda nada: pondrías <strong>${euros(f, -r.neto)}</strong> de tu bolsillo, porque la estructura y las cuotas se pagan igual`;
 
     const diferencia = gana
-      ? `<div class="res-card-dif mc">Es el que más te deja con ${euros(f, c.beneficio)} de beneficio.</div>`
+      ? `<div class="res-card-dif mc">Es el que más te deja facturando ${euros(f, c.beneficio)} al año.</div>`
       : `<div class="res-card-dif mc">${euros(f, r.neto - mejor.neto)} al año frente a ${esc(NOMBRE_CORTO[mejor.escenario] || mejor.nombre)}.</div>`;
 
     // Dubái enseña además su horquilla: el coste de contabilidad es el número más
@@ -978,6 +1023,58 @@ function pintarResultados(c) {
   set('res-detalle', pintarDetalle(c));
   set('res-umbrales', pintarUmbrales(c));
   set('res-tabla', pintarTabla(c));
+  set('res-paraguay-plan', pintarPlanParaguay(c));
+}
+
+// Lo que cuesta MUDARSE, que es la pregunta que de verdad decide y no es fiscal.
+// Se separa lo seguro de lo dudoso (el depósito de solvencia) porque las dos fuentes
+// oficiales paraguayas se contradicen y no se puede dar por cierto.
+function pintarPlanParaguay(c) {
+  const { f } = c;
+  const o = c.opciones || {};
+  const p = planMudanzaParaguay(undefined, num(o.paraguayEurPorUsd, 0));
+  const ahorroAlAno = Math.max(0, (netoDe('paraguay', c.beneficio, o).neto || 0)
+    - (netoDe('espana-autonomo', c.beneficio, o).neto || 0));
+  const anos = ahorroAlAno > 0 ? p.minimo / ahorroAlAno : null;
+
+  const filasTram = p.tramites.map((t) => `<div class="casc-fila">
+      <span>${esc(t.concepto)}<small class="mc"> · ${esc(t.nota)}</small></span>
+      <span class="num">${euros(f, t.eur)}</span></div>`).join('');
+
+  const filasAhorro = p.partidas.map((x) => `<div class="casc-fila${x.seguro ? '' : ' casc-dudosa'}">
+      <span>${esc(x.concepto)}</span>
+      <span class="num">${euros(f, x.eur)}</span></div>`).join('');
+
+  return `<div class="bloque-title">Qué cuesta irte a Paraguay</div>
+    <div class="casc-grupo">
+      <div class="pat-grupo">TRÁMITES DE RESIDENCIA</div>
+      ${filasTram}
+      <div class="casc-fila casc-hito"><span>Total de trámites</span>
+        <span class="num">${euros(f, p.totalTramites)}</span></div>
+    </div>
+    <p class="mc">Aranceles oficiales del Decreto 6225/2026, indexados al jornal mínimo:
+      suben cada julio. La cédula tarda 60 días hábiles y hay que retirarla <strong>en
+      persona</strong>, así que cuenta con al menos dos viajes.</p>
+
+    <div class="casc-grupo">
+      <div class="pat-grupo">CUÁNTO LLEVAR AHORRADO</div>
+      ${filasAhorro}
+      <div class="casc-fila casc-hito"><span>Mínimo para irte</span>
+        <span class="num pos">${euros(f, p.minimo)}</span></div>
+      <div class="casc-fila casc-final"><span>Con el depósito de solvencia por si acaso</span>
+        <span class="num">${euros(f, p.conColchon)}</span></div>
+    </div>
+    ${anos !== null && Number.isFinite(anos) ? `<p class="mc">A tu ritmo de hoy, ahorrando
+      todo lo que te ahorrarías en impuestos allí (${euros(f, ahorroAlAno)} al año),
+      tardarías <strong>${anos.toFixed(1)} años</strong> en juntar ese mínimo. El dinero
+      para mudarte pesa mucho más que el ahorro fiscal: esa es la cuenta que decide.</p>` : ''}
+
+    <div class="aviso-ambar">Dos cosas sin resolver, las dos de fuente oficial paraguaya.
+      El Ministerio de Exteriores publica que hacen falta 5.000 USD de solvencia en
+      depósito; Migraciones, bajo la Ley 6984/2022, no lo menciona. Y la Resolución
+      DNM 407/2026 endureció desde el 6 de julio la acreditación de ingresos, sin publicar
+      importes. Pregúntalo por escrito a Migraciones antes de presupuestar nada.
+      Y recuerda que <strong>Stripe no opera en Paraguay</strong>.</div>`;
 }
 
 // ctx = { beneficioAnual, opciones, f, card } (+ modelo y ventasMedia si se quieren las
@@ -1015,6 +1112,7 @@ export function bindResidencia(handlers) {
     const base = ctxUltimo || {};
     return prepararCtx({
       beneficioAnual: base.beneficioReal,
+      devengadoAnual: base.devengadoAnual,
       opciones: leer(h.getOpciones, null),
       modelo: base.modelo,
       ventasMedia: base.ventasMedia,
@@ -1082,7 +1180,10 @@ export function bindResidencia(handlers) {
     const benef = e.target.closest('#res-beneficio');
     if (benef) {
       const v = parseFloat(benef.value);
-      beneficioManual = Number.isFinite(v) ? Math.max(0, v) : 0;
+      // Lo tecleado puede venir en meses: se guarda SIEMPRE en años, que es la unidad
+      // en la que piensan los escenarios. Solo la pantalla habla de meses.
+      const bruto = Number.isFinite(v) ? Math.max(0, v) : 0;
+      beneficioManual = periodoMensual ? bruto * 12 : bruto;
       refrescar();
       // Los atajos se marcan con classList, sin reescribir HTML: así se iluminan mientras
       // se teclea en el input de al lado sin robarle el foco.
@@ -1105,6 +1206,13 @@ export function bindResidencia(handlers) {
   raiz.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (btn) {
+      // El selector mes/año no cambia la cifra, solo cómo se escribe y se lee.
+      const per = btn.closest('#res-periodo') ? btn.dataset.periodo : null;
+      if (per) {
+        periodoMensual = per === 'mes';
+        repintarTodo();
+        return;
+      }
       if (btn.id === 'res-beneficio-reset') {
         beneficioManual = null;
         repintarTodo();

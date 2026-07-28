@@ -902,6 +902,55 @@ td.col-real { font-weight: 600; }
 .tramo-datos .mc { display: block; margin-top: 8px; line-height: 1.45; }
 #obj-irpf .obj-duo { margin-top: 16px; }
 
+/* ---------- Las dos lecturas de su renta: lo facturado contra lo devengado ----------
+   La primera columna lleva `.manda` porque es la ÚNICA por la que tributa. Sin ese peso
+   visual, las tres cifras se leían como tres versiones igual de válidas del mismo dato y
+   el usuario se quedaba con la más grande, que es justo la que no es suya todavía. */
+.renta-tri {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px; margin-top: 16px;
+}
+.renta-tri > div {
+  border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); padding: 16px 18px;
+}
+.renta-tri > div.manda { border-color: var(--green); background: var(--green-dim); }
+.renta-tri .l {
+  display: block; font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .08em;
+}
+.renta-tri > div.manda .l { color: var(--green); }
+.renta-tri .v {
+  display: block; font-size: clamp(17px, 3.4vw, 23px); font-weight: 700; margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.renta-tri .mc { display: block; margin-top: 8px; line-height: 1.45; }
+.renta-tri > div.manda .mc { color: var(--text); }
+
+/* ---------- La escala completa del IRPF, siempre visible ----------
+   La pidió él con estas palabras: quiere ver los tramos exactos. Va como tabla y no solo
+   como barra de colores porque los números tienen que poder leerse uno a uno. */
+.escala { margin-top: 20px; }
+.escala-tit {
+  font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px;
+}
+.escala-tabla { width: 100%; }
+.escala-tabla .escala-tipo { font-weight: 700; }
+.escala-tabla tr.tuyo > td,
+.escala-tabla tr.tuyo-marca > td { background: var(--green-dim); color: var(--text); }
+.escala-tabla tr.tuyo > td { border-bottom: 0; }
+.escala-tabla tr.tuyo .escala-tipo { color: var(--green); }
+/* La marca de su base: fila propia debajo de su tramo, para que quepa en 390 px sin que
+   haya que arrastrar la tabla justo para leer el único dato que es suyo. */
+.escala-tabla tr.tuyo-marca > td { padding-top: 0; }
+.escala-marca {
+  display: inline-block;
+  border-left: 3px solid var(--amber); padding-left: 8px;
+  font-size: 11.5px; color: var(--amber);
+}
+.escala-pie { font-size: 13px; line-height: 1.55; margin-top: 10px; }
+
 /* La fila de la escalera donde caen las ventas de ESTE mes (si no es la de AHORA). */
 .fila-tag.mes { background: var(--surface2); color: var(--muted); border: 1px solid var(--border2); }
 
@@ -915,7 +964,12 @@ td.col-real { font-weight: 600; }
   .tramo-seg .pct { font-size: 11.5px; }
   .tramo-seg .lim { display: none; }
   .tramo-datos { grid-template-columns: 1fr; gap: 8px; }
+  .renta-tri { grid-template-columns: 1fr; gap: 8px; }
+  .renta-tri > div { padding: 14px 15px; border-radius: 13px; }
   .obj-ajustes { grid-template-columns: 1fr; }
+  /* En 390px la marca de la base no cabe en su columna: pasa a línea propia dentro de la
+     fila resaltada en vez de forzar scroll horizontal para leer un dato que ya es suyo. */
+  .escala-marca { font-size: 11px; padding-left: 6px; }
 }
 
 /* ============================================================
@@ -1422,3 +1476,15 @@ td.col-real { font-weight: 600; }
 .res-card-bloqueo { color: var(--amber); }
 #res-tabla td.res-sin-visado { color: var(--amber); }
 #res-tabla td.res-sin-visado sup { font-size: 9px; margin-left: 1px; }
+
+/* Selector mes/año de "Dónde vivir" y bloque de mudanza a Paraguay. */
+.res-periodo { margin: 0 0 10px; }
+.res-equivale { margin: 6px 0 10px; }
+.casc-grupo { margin: 14px 0; }
+/* Partida que no está confirmada: se ve que es un "por si acaso", no un coste cierto. */
+.casc-dudosa { opacity: 0.72; border-left: 2px solid var(--amber); padding-left: 10px; }
+
+@media (max-width: 640px) {
+  .res-periodo { width: 100%; }
+  .res-periodo button { flex: 1; }
+}

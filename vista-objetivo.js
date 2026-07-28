@@ -21,8 +21,10 @@ import {
   irpfAnualReal,
   bolsilloRealMes,
   ventasParaLimpiarReal,
-  situacionFiscalDelAnio,
-  TRAMOS_IRPF,
+  rentaFiscalDelAnio,
+  tramoDe,
+  TRAMOS_IRPF_TEXTO,
+  SMI_ANUAL,
   comparativaFiscal,
   ventasParaDubai,
 } from './objetivo.js';
@@ -67,6 +69,16 @@ const AVISO_MODELO = 'Esto sirve para decidir, no para Hacienda. Los tramos de I
 const AVISO_DUBAI = 'Solo cuenta impuestos y estructura. No incluye el coste de vivir allí, los 183 días de residencia obligatorios, ni lo que España te pueda reclamar al irte. Consúltalo con un fiscalista antes de mover nada.';
 const EXPLICACION_TIPOS = 'El marginal es lo que pagas por el SIGUIENTE euro. El medio es lo que pagas de verdad sobre el total. Nunca pierdes dinero por ganar más.';
 const IMPOSIBLE = 'Con estos números no se llega ni vendiendo infinito.';
+
+// LA frase que sostiene todo el bloque de IRPF, y por eso es una constante y no se toca.
+//
+// Él no es socio de una sociedad española que le reparte beneficios: es un autónomo español
+// que FACTURA a la empresa alemana de su socio, y solo tributa por lo que factura. Pero la
+// renta de un autónomo se imputa por DEVENGO, no por cobro, así que si tiene derecho
+// contractual al 40 % y no lo factura, su asesoría puede decirle que debería estar
+// facturando más. La app no puede resolver eso -depende de un contrato que no conoce-, así
+// que hace lo único honesto: enseña las DOS cifras y dice cuál usa para los impuestos.
+const AVISO_DEVENGO = 'Tributas por lo que facturas, no por lo que te corresponde. Si tienes derecho contractual al 40 % y no lo facturas, pregúntale a tu asesoría si deberías estar facturándolo igualmente: la renta de un autónomo se reconoce por devengo.';
 
 const ICON_WARN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
 
@@ -376,99 +388,178 @@ function pintarCascada(c) {
 // ---------------------------------------------------------------------------
 // C) El tramo en vivo: la foto fiscal del año en curso
 // ---------------------------------------------------------------------------
-// Todo sale de situacionFiscalDelAnio con los datos reales de Tradingverso: lo ganado
-// de enero a hoy, anualizado y pasado por la escala. CERO inputs en este bloque.
+//
+// LO QUE SE ARREGLÓ AQUÍ, porque es el error más caro que ha tenido este dashboard:
+// este bloque calculaba los impuestos sobre `situacionFiscalDelAnio`, es decir, sobre su
+// 40 % del beneficio del negocio. Esa NO es su renta. Él es un autónomo español que FACTURA
+// a la empresa alemana de su socio: solo tributa por lo que factura, y factura cuando
+// retira. Lo que no ha facturado sigue en la caja del negocio y no es renta suya todavía.
+//
+// A 28/07/2026 las dos lecturas se separaban 5.564,55 € y cambiaban tres respuestas:
+//                                  devengado (mal)      facturado (bien)
+//   de enero a hoy ...............  10.937,35 €          5.372,80 €
+//   proyección anual de renta ....  19.012,59 €          9.339,63 €
+//   base de IRPF .................  17.126,51 €          7.479,63 €
+//   IRPF del año .................   2.433,36 €            366,63 €  (4,9 % efectivo)
+//   tramo ........................  24 % (el segundo)    19 % (el PRIMERO)
+//   tarifa plana .................  no puede prorrogar   SÍ puede prorrogar
+//
+// Ahora los impuestos salen de `rentaFiscalDelAnio` (los retiros) y el devengado se queda
+// AL LADO, con su etiqueta, porque es la otra mitad de la historia: mide lo que le quedaría
+// por facturar y es de lo que tiene que hablar con su asesoría (ver AVISO_DEVENGO).
+// CERO inputs en este bloque: todo sale de los datos reales de Tradingverso.
+
+// Una fila de la escala completa: "0 €" / "12.450 €" / "19 %", con el último tramo dicho
+// como lo que es -sin techo- en vez de inventarle un número redondo que no existe en la ley.
+//
+// La marca de su base va en una fila PROPIA debajo de la suya, no en una cuarta columna: a
+// 390 px la cuarta columna empujaba la tabla fuera del ancho y el dato que había que ver
+// -el suyo- era justo el que se quedaba detrás del borde y había que arrastrar para leer.
+function filaTramo(t, i, indiceActual, base, f) {
+  const suyo = i === indiceActual;
+  const hasta = Number.isFinite(t.hasta) ? eurosCortos(t.hasta) : 'sin techo';
+  const fila = `<tr${suyo ? ' class="tuyo"' : ''}>
+    <td class="num">${eurosCortos(t.desde)}</td>
+    <td class="num">${hasta}</td>
+    <td class="num escala-tipo">${t.tipo} %</td>
+  </tr>`;
+  if (!suyo) return fila;
+  return `${fila}<tr class="tuyo-marca">
+    <td colspan="3"><span class="escala-marca">Aquí cae tu base: ${euros(f, base)}</span></td>
+  </tr>`;
+}
+
+// La escala ENTERA, siempre visible. La pidió él con estas palabras: quiere ver los tramos
+// exactos porque no se fía de lo que le devuelve una búsqueda. Va como tabla y no solo como
+// barra de colores porque los números tienen que poder leerse uno a uno.
+function pintarEscalaIrpf(base, f) {
+  const t = tramoDe(base);
+  const filas = TRAMOS_IRPF_TEXTO.map((x, i) => filaTramo(x, i, t.indice, base, f)).join('');
+
+  const siguiente = TRAMOS_IRPF_TEXTO[t.indice + 1] || null;
+  const pie = siguiente && t.faltaParaElSiguiente !== null
+    ? `Estás en el tramo del ${t.tipo} %. Te faltan ${euros(f, t.faltaParaElSiguiente)} para el del ${siguiente.tipo} %.`
+    : `Estás en el tramo del ${t.tipo} %, el más alto de la escala. No hay siguiente escalón.`;
+
+  return `<div class="escala">
+    <div class="escala-tit">La escala completa del IRPF</div>
+    <div class="tabla-wrap obj-mini">
+      <table class="escala-tabla">
+        <thead><tr>
+          <th class="num">Desde</th>
+          <th class="num">Hasta</th>
+          <th class="num">Tipo</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
+      </table>
+    </div>
+    <p class="escala-pie"><strong>${pie}</strong></p>
+    <p class="tramo-pie">Cada tramo grava SOLO lo que cae dentro de él: pasar al siguiente no encarece lo de abajo. Escala general estatal + autonómica agregada; cada comunidad cambia su mitad, así que esto sirve para decidir, no para liquidar.</p>
+  </div>`;
+}
 
 function pintarIrpf(c) {
   const { modelo: m, f, card } = c;
-  const s = situacionFiscalDelAnio(c.datos, m, c.hoy);
+  const r = rentaFiscalDelAnio(c.datos, m, c.hoy);
   const d = c.datos || {};
-  const hayDatos = ((d.ventas || []).length > 0 || (d.gastosNegocio || []).length > 0)
-    && s.mesesTranscurridos >= 1;
+  const hayDatos = ((d.retiros || []).length > 0 || (d.ventas || []).length > 0
+    || (d.gastosNegocio || []).length > 0) && r.mesesTranscurridos >= 1;
   if (!hayDatos) {
-    return '<p class="obj-nota">Todavía no hay datos del año en curso: en cuanto lleguen ventas o gastos de Tradingverso, este panel se calcula solo.</p>';
+    return '<p class="obj-nota">Todavía no hay datos del año en curso: en cuanto lleguen retiros, ventas o gastos de Tradingverso, este panel se calcula solo.</p>';
   }
 
-  const tipoTramo = TRAMOS_IRPF[s.tramo].tipo;
-  const base = Math.max(0, s.baseProyectada);
-
-  // La escala entera como barra de segmentos: el tramo del usuario iluminado y una
-  // marca en el punto exacto de su base proyectada dentro de ese tramo.
-  const segs = TRAMOS_IRPF.map((t, i) => {
-    const suelo = i === 0 ? 0 : TRAMOS_IRPF[i - 1].hasta;
-    const activo = i === s.tramo;
-    let marca = '';
-    if (activo) {
-      // En el último tramo (sin techo) la marca se ancla a una escala del propio suelo.
-      const ancho = Number.isFinite(t.hasta) ? t.hasta - suelo : Math.max(1, suelo);
-      const pos = Math.max(0.05, Math.min(0.95, ancho > 0 ? (base - suelo) / ancho : 0.5));
-      marca = `<span class="tramo-marca" style="left:${(pos * 100).toFixed(1)}%" title="Tu base proyectada: ${euros(f, base)}"></span>`;
-    }
-    const lim = Number.isFinite(t.hasta)
-      ? `hasta ${eurosCortos(t.hasta)}`
-      : `más de ${eurosCortos(TRAMOS_IRPF[i - 1].hasta)}`;
-    return `<div class="tramo-seg${activo ? ' on' : ''}">${marca}<span class="pct">${t.tipo} %</span><span class="lim">${lim}</span></div>`;
-  }).join('');
+  const base = Math.max(0, r.baseIrpf);
+  const t = tramoDe(base);
 
   const cabeza = `<div class="tramo-head">
-      <span class="l">Con lo que llevas ganado este año, proyectado a diciembre</span>
-      <div class="v">Vas por el tramo ${s.tramo + 1} (${tipoTramo} %)</div>
-    </div>
-    <div class="tramo-barra">${segs}</div>
-    <p class="tramo-pie">La marca ámbar es tu base proyectada: ${euros(f, base)}. Cada tramo grava solo lo que cae dentro de él: subir de tramo no encarece lo de abajo.</p>`;
+      <span class="l">Con lo que has FACTURADO este año, proyectado a diciembre</span>
+      <div class="v">Vas por el tramo ${t.indice + 1} (${t.tipo} %)</div>
+    </div>`;
 
-  const mesHoy = MESES_LARGO[s.mesesTranscurridos - 1] || '';
-  const lineas = `<div class="tramo-datos">
-    <div>
-      <span class="l">Llevas ganado este año (tu ${pctTexto(m.miShare)})</span>
-      <span class="v num">${euros(f, s.miParteYtd)}</span>
-      <span class="mc">de enero a ${mesHoy}, de tus ventas y gastos reales</span>
+  // Las DOS cifras, juntas y sin ambigüedad posible sobre cuál manda. La primera lleva la
+  // clase `manda` porque es la única por la que tributa; las otras dos existen para que no
+  // parezca que la app se ha dejado dinero fuera.
+  const mesHoy = MESES_LARGO[r.mesesTranscurridos - 1] || '';
+  const dosCifras = `<div class="renta-tri">
+    <div class="manda">
+      <span class="l">Has facturado este año</span>
+      <span class="v num">${euros(f, r.retiradoYtd)}</span>
+      <span class="mc">POR ESTO TRIBUTAS · tu ${pctTexto(m.miShare)} de los repartos de enero a ${mesHoy}</span>
     </div>
     <div>
-      <span class="l">Base proyectada a diciembre</span>
-      <span class="v num">${euros(f, s.baseProyectada)}</span>
-      <span class="mc">a este ritmo, tras cuota de autónomo y asesoría</span>
+      <span class="l">Te correspondería (${pctTexto(m.miShare)})</span>
+      <span class="v num">${euros(f, r.devengadoYtd)}</span>
+      <span class="mc">devengado: tu parte del beneficio del negocio, la hayas facturado o no</span>
+    </div>
+    <div>
+      <span class="l">Sin facturar todavía</span>
+      <span class="v num">${euros(f, r.sinFacturar)}</span>
+      <span class="mc">sigue en la caja del negocio: no es renta tuya hasta que la factures</span>
+    </div>
+  </div>
+  <p class="mc obj-explica">${AVISO_DEVENGO}</p>`;
+
+  const proyeccion = `<div class="tramo-datos">
+    <div>
+      <span class="l">Facturación proyectada a diciembre</span>
+      <span class="v num">${euros(f, r.retiradoProyectado)}</span>
+      <span class="mc">a este ritmo de retiros, si sigue igual hasta fin de año</span>
+    </div>
+    <div>
+      <span class="l">Base de IRPF proyectada</span>
+      <span class="v num">${euros(f, r.baseIrpf)}</span>
+      <span class="mc">lo facturado menos cuota de autónomo (${euros(f, m.cuotaAutonomo)}) y asesoría (${euros(f, m.deducibles)}) de los doce meses</span>
     </div>
   </div>`;
+
+  const escala = pintarEscalaIrpf(base, f);
 
   const duo = `<div class="obj-duo">
     <div class="obj-duo-col">
       <div class="l">Retendrás este año</div>
-      <div class="v num">${euros(f, s.retenidoProyectado)}</div>
-      <span class="mc">el ${pctTexto(m.irpf)} de tu base (tu parte tras cuota y asesoría), proyectado a diciembre</span>
+      <div class="v num">${euros(f, r.retenidoProyectado)}</div>
+      <span class="mc">el ${pctTexto(m.irpf)} de tu base (lo facturado tras cuota y asesoría), proyectado a diciembre</span>
     </div>
     <div class="obj-duo-vs">contra</div>
     <div class="obj-duo-col">
       <div class="l">De verdad te tocará</div>
-      <div class="v num">${euros(f, s.irpfRealProyectado)}</div>
+      <div class="v num">${euros(f, r.irpfReal)}</div>
       <span class="mc">IRPF real por tramos sobre la base proyectada</span>
     </div>
   </div>`;
 
   let veredicto;
-  if (Math.abs(s.diferencia) < 1) {
+  if (Math.abs(r.diferencia) < 1) {
     veredicto = `<div class="obj-veredicto">Vas justo: lo que retienes es casi exactamente lo que pagarás.
-      <span class="mc">Diferencia de ${euros(f, Math.abs(s.diferencia))} al año.</span></div>`;
-  } else if (s.diferencia > 0) {
-    veredicto = `<div class="obj-veredicto ok">Te devolverán ${euros(f, s.diferencia)}
+      <span class="mc">Diferencia de ${euros(f, Math.abs(r.diferencia))} al año.</span></div>`;
+  } else if (r.diferencia > 0) {
+    veredicto = `<div class="obj-veredicto ok">Te devolverán ${euros(f, r.diferencia)}
       <span class="mc">Retienes de más. Es tuyo, pero no lo verás hasta la declaración.</span></div>`;
   } else {
-    veredicto = `<div class="obj-veredicto mal">Aparta ${euros(f, -s.diferencia)} — no es tuyo
+    veredicto = `<div class="obj-veredicto mal">Aparta ${euros(f, -r.diferencia)} — no es tuyo
       <span class="mc">Con tu retención no llega: esa diferencia te la reclamarán en la declaración.</span></div>`;
   }
 
-  const sinBase = s.baseProyectada <= 0
-    ? '<p class="obj-nota">Con lo que llevas este año no llegas a base imponible: de IRPF, cero.</p>'
+  const sinBase = r.baseIrpf <= 0
+    ? '<p class="obj-nota">Con lo que llevas facturado este año no llegas a base imponible: de IRPF, cero. La cuota de autónomo y la asesoría de los doce meses ya se te comen lo facturado.</p>'
     : '';
 
+  // El techo del SMI se mide sobre el rendimiento, que es lo FACTURADO. Con el devengado la
+  // app decía que la prórroga ya no le cabía teniendo 7.754 € de margen por debajo.
+  const prorroga = r.puedeProrrogarTarifaPlana === null
+    ? ''
+    : (r.puedeProrrogarTarifaPlana
+      ? `<p class="obj-nota">Tarifa plana: al ritmo de este año facturarás ${euros(f, r.retiradoProyectado)}, por debajo de los ${euros(f, SMI_ANUAL)} del SMI 2026. <strong>Puedes prorrogar el segundo año</strong>, con ${euros(f, SMI_ANUAL - r.retiradoProyectado)} de margen. Pídela antes de que se cumplan los 12 primeros meses del alta.</p>`
+      : `<p class="obj-nota">Tarifa plana: al ritmo de este año facturarás ${euros(f, r.retiradoProyectado)}, por encima de los ${euros(f, SMI_ANUAL)} del SMI 2026. La prórroga del segundo año no te la van a conceder: cuenta con la cuota de verdad.</p>`);
+
   const tarjetas = `<div class="grid grid-3">
-    ${card('Tipo medio real', `<span class="num pos">${pctTexto(s.tipoMedio)}</span>`, 'lo que pagas de verdad sobre el total')}
-    ${card('Tipo marginal', `<span class="num">${pctTexto(s.tipoMarginal)}</span>`, 'lo que pagarías por el siguiente euro')}
+    ${card('Tipo medio real', `<span class="num pos">${pctTexto(r.tipoMedio)}</span>`, 'lo que pagas de verdad sobre el total')}
+    ${card('Tipo marginal', `<span class="num">${pctTexto(r.tipoMarginal)}</span>`, 'lo que pagarías por el siguiente euro')}
     ${card('Lo que te apartas', `<span class="num">${pctTexto(m.irpf)}</span>`, 'de tu base, mes a mes')}
   </div>
   <p class="mc obj-explica">${EXPLICACION_TIPOS}</p>`;
 
-  return cabeza + lineas + duo + veredicto + sinBase + tarjetas;
+  return cabeza + dosCifras + proyeccion + escala + duo + veredicto + sinBase + prorroga + tarjetas;
 }
 
 // ---------------------------------------------------------------------------
@@ -688,19 +779,42 @@ function pintarPalancasNota(c) {
 // datos. Cada campo dice qué es y de dónde ha salido su valor actual, para que quede
 // claro que esto es un corrector, no un formulario.
 
+// Las DOS cifras de los gastos fijos, una al lado de la otra: la media de la ventana (la
+// que de verdad se usa en todos los cálculos) y lo que lleva el mes en curso suelto.
+//
+// POR QUÉ HACEN FALTA LAS DOS. Los gastos del negocio no son planos: en 2026 fueron 293,86
+// (abril) · 368,30 (mayo) · 675,66 (junio) · 934,17 (julio). Cualquier media de tres meses
+// va por detrás de la realidad cuando el gasto sube, y con una sola cifra en pantalla no hay
+// forma de saber si vas por detrás o por delante. Con las dos, el desfase se ve solo.
+function cifrasFijos(c, f) {
+  const fu = c.fuente || {};
+  const partes = [];
+  if (Number.isFinite(Number(fu.fijosMedia))) partes.push(`media 3 meses: ${euros(f, Number(fu.fijosMedia))}`);
+  if (Number.isFinite(Number(fu.fijosMesEnCurso))) partes.push(`mes en curso: ${euros(f, Number(fu.fijosMesEnCurso))}`);
+  return partes.length ? ` ${partes.join(' · ')}.` : '';
+}
+
 // De dónde salen los fijos que ve en el campo: medidos, puestos a mano o de fábrica.
 function descFijos(c) {
   const fu = c.fuente || {};
+  const f = typeof c.f === 'function' ? c.f : formatoEuros;
+  const cifras = cifrasFijos(c, f);
   if (fu.fijosNegocio === 'manual') {
-    return 'Los escribiste tú a mano; "Volver a los valores por defecto" recupera la media medida de tus gastos reales.';
+    return `Los escribiste tú a mano; "Volver a los valores por defecto" recupera la media medida de tus gastos reales.${cifras}`;
   }
   if (fu.fijosNegocio === 'datos') {
     const rango = rangoMesesTexto(fu.meses);
-    return rango
+    const donde = rango
       ? `Medido de tus gastos reales de ${rango}, sin contar comisiones.`
       : 'Medido de tus gastos reales, sin contar comisiones.';
+    // El mes en curso entra en la media en cuanto pasa de la mitad: esconderlo hacía que
+    // esta línea dijera 320,94 € con el recibo de 934,17 € de ese mismo mes encima.
+    const regla = fu.incluyeMesEnCurso
+      ? ' El mes en curso ya cuenta: lleva más de 15 días.'
+      : '';
+    return `${donde}${regla}${cifras}`;
   }
-  return 'Valor por defecto: todavía no han llegado gastos reales que medir.';
+  return `Valor por defecto: todavía no han llegado gastos reales que medir.${cifras}`;
 }
 
 function pintarAjustes(c) {

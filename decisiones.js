@@ -38,6 +38,7 @@ import {
   puntoMuerto,
   ventasParaBeneficioAnual,
   situacionFiscalDelAnio,
+  rentaFiscalDelAnio,
   modeloDesdeDatos,
 } from './objetivo.js';
 
@@ -209,11 +210,16 @@ function contexto(ctx) {
   const miParteMes = mesActualModelo.miParte;
   const miParteVenta = porVenta(modelo).miParte;
 
-  // EL beneficio anual de toda la app. Puede llegar por ctx porque app.js lo calcula UNA
-  // sola vez y se lo pasa igual a esta pantalla y a "Dónde vivir": antes cada una lo
-  // sacaba por su cuenta y las dos comparaban países contra cifras distintas, así que a un
-  // toque de distancia la app decía "te faltan 0,3 ventas para que Paraguay te compense" y
-  // "Paraguay ya es el que más te deja". Si no llega, sale de la media de ventas.
+  // LA renta anual de toda la app, la que se compara contra cada umbral. Llega por ctx
+  // porque app.js la calcula UNA sola vez y se la pasa igual a esta pantalla y a "Dónde
+  // vivir": antes cada una la sacaba por su cuenta y las dos comparaban países contra
+  // cifras distintas, así que a un toque de distancia la app decía "te faltan 0,3 ventas
+  // para que Paraguay te compense" y "Paraguay ya es el que más te deja".
+  //
+  // Lo que app.js manda hoy es lo que él FACTURA proyectado a doce meses, no su 40 % del
+  // beneficio del negocio: es un autónomo que factura a la empresa de su socio y solo
+  // tributa por lo que factura. Si no llega nada, se cae a la media de ventas, que es lo
+  // único reconstruible desde aquí; y por eso los tests pueden forzarla.
   const beneficioPorVentas = miParteMes * 12;
   const beneficioAnual = Number.isFinite(Number(c.beneficioAnual))
     ? Number(c.beneficioAnual)
@@ -226,9 +232,34 @@ function contexto(ctx) {
     ? ventasMedia
     : (ventasParaBeneficioAnual(modelo, beneficioAnual) ?? ventasMedia);
 
+  // La foto por DEVENGO: su 40 % del beneficio del negocio. Es informativa -mide el tamaño
+  // del negocio y de aquí sale `mesesTranscurridos`- y NO se usa para calcular impuestos.
   const situacionFiscal = c.situacionFiscal && Number.isFinite(Number(c.situacionFiscal.irpfRealProyectado))
     ? c.situacionFiscal
     : situacionFiscalDelAnio(datos, modelo, hoy);
+
+  // La foto FISCAL de verdad: lo que factura. `rentaFiscal.irpfReal` es el IRPF que se le
+  // va a reclamar, y es el que manda en la reserva de impuestos.
+  const rentaDada = Boolean(c.rentaFiscal) && Number.isFinite(Number(c.rentaFiscal.irpfReal));
+  const rentaFiscal = rentaDada ? c.rentaFiscal : rentaFiscalDelAnio(datos, modelo, hoy);
+
+  // EL IRPF del año, con un orden de preferencia que no es cosmético:
+  //   1) `rentaFiscal.irpfReal` si lo mandan por ctx: lo facturado pasado por la escala, que
+  //      es lo que app.js calcula hoy;
+  //   2) `situacionFiscal.irpfRealProyectado` si lo mandan por ctx: una foto fiscal impuesta
+  //      desde fuera. Respetarla es lo que evita que este módulo ignore lo que le acaban de
+  //      decir (los tests fijan el escenario justo así);
+  //   3) y si no llega ninguna, lo que salga de los datos por la vía buena: los retiros.
+  // Lo que NUNCA vuelve a pasar solo es que el IRPF del DEVENGADO se calcule aquí dentro y
+  // se cuele como si fuera la deuda: con las cifras de julio de 2026 eso pedía apartar
+  // 2.433,36 € cuando la factura real son 366,63.
+  const situacionDada = Boolean(c.situacionFiscal)
+    && Number.isFinite(Number(c.situacionFiscal.irpfRealProyectado));
+  const irpfDelAnio = rentaDada
+    ? Math.max(0, num(c.rentaFiscal.irpfReal, 0))
+    : (situacionDada
+      ? Math.max(0, num(c.situacionFiscal.irpfRealProyectado, 0))
+      : Math.max(0, num(rentaFiscal.irpfReal, 0)));
 
   const patrimonio = c.patrimonio || {};
   const cuentas = Array.isArray(patrimonio.cuentas) ? patrimonio.cuentas : [];
@@ -271,7 +302,7 @@ function contexto(ctx) {
   const c2 = {
     datos, modelo, hoy, mes, ventas, retiros, caja, config, split,
     ventasMedia, ventasMediaBeneficio, mesActualModelo, miParteMes, beneficioAnual, miParteVenta,
-    situacionFiscal, cuentas, objetivos, residencia, gastosVida, tarifaPlana,
+    situacionFiscal, rentaFiscal, irpfDelAnio, cuentas, objetivos, residencia, gastosVida, tarifaPlana,
   };
   c2.fraccionDelAnio = fraccionDelAnioDevengada(c2);
   return c2;
@@ -630,6 +661,12 @@ function hitoTarifaPlana(c) {
   // alcanzados). El plazo de la prórroga, si se pasa, no se recupera.
   if (quedan === null) {
     const yaPorEncima = c.beneficioAnual >= UMBRALES.smiAnual;
+    // El techo se mide sobre el RENDIMIENTO, que es lo que factura, no sobre el beneficio
+    // del negocio. Con el beneficio esta frase decía "la prórroga probablemente no te la
+    // concedan" teniendo 7.754 € de margen por debajo del SMI.
+    const loDeLaProrroga = yaPorEncima
+      ? ` Además, para prorrogar el segundo año hay que quedarse por debajo de ${formatoEuros(UMBRALES.smiAnual)} de rendimiento neto al año (SMI 2026) y tú ya vas por ${formatoEuros(c.beneficioAnual)} facturados: la prórroga probablemente no te la concedan, así que cuenta con la cuota de verdad.`
+      : ` La buena noticia: SÍ puedes prorrogarla. El techo para el segundo año es ${formatoEuros(UMBRALES.smiAnual)} de rendimiento neto al año (SMI 2026) y tú vas por ${formatoEuros(c.beneficioAnual)} facturados, con ${formatoEuros(UMBRALES.smiAnual - c.beneficioAnual)} de margen.`;
     return hito({
       id: 'tarifa-plana',
       titulo: 'Se te acaba la tarifa plana',
@@ -640,7 +677,7 @@ function hitoTarifaPlana(c) {
       alcanzado: false,
       distancia: null,
       ventasQueFaltan: null,
-      quePasa: `Cuando se acabe, ${elSalto}.${yaPorEncima ? ` Además, para prorrogar el segundo año hay que quedarse por debajo de ${formatoEuros(UMBRALES.smiAnual)} de rendimiento neto al año (SMI 2026) y tú ya vas por ${formatoEuros(c.beneficioAnual)}: la prórroga probablemente no te la concedan, así que cuenta con la cuota de verdad.` : ''}`,
+      quePasa: `Cuando se acabe, ${elSalto}.${loDeLaProrroga}`,
       queHacer: 'Entra hoy en Importass y mira la fecha exacta de tu alta en el RETA. La prórroga hay que pedirla ANTES de que se cumplan los 12 primeros meses: si se pasa el plazo, se pierde y no se recupera. Es la acción de menos esfuerzo y más dinero que tienes ahora mismo.',
       urgencia: 'ya',
       faltaDato: 'No sé en qué mes te diste de alta en el RETA, así que no puedo contarte los meses que quedan. Está en Importass, en "Mis datos de autónomo".',
@@ -682,7 +719,7 @@ function hitoTarifaPlanaSmi(c) {
     id: 'tarifa-plana-smi',
     titulo: superado
       ? 'La prórroga de la tarifa plana ya no te sale por rendimiento'
-      : 'Techo de rendimiento para poder prorrogar la tarifa plana',
+      : 'Puedes prorrogar la tarifa plana: vas por debajo del techo',
     tipo: 'fiscal',
     sentido: 'aviso',
     esTecho: true,
@@ -694,12 +731,14 @@ function hitoTarifaPlanaSmi(c) {
     // techo que cuesta 2.600 € al año era el signo invertido del bug.
     ventasQueFaltan: null,
     holgura,
+    // El rendimiento que mide este techo es lo que FACTURA, no el beneficio del negocio:
+    // lo que no se factura no es rendimiento suyo y no cuenta contra el SMI.
     quePasa: superado
-      ? `Para prorrogar el segundo año de tarifa plana hay que quedarse por debajo de ${formatoEuros(UMBRALES.smiAnual)} de rendimiento neto al año (SMI 2026) y vas por ${formatoEuros(c.beneficioAnual)}. Por encima no se puede prorrogar, y si la prorrogaste y lo superas, te regularizan. Esto no es una mala noticia: ganas más de lo que vale la prórroga.`
-      : `Para prorrogar el segundo año hay que quedarse por debajo de ${formatoEuros(UMBRALES.smiAnual)} de rendimiento neto al año (SMI 2026). Vas por ${formatoEuros(c.beneficioAnual)}: te sobran ${formatoEuros(margen)}, que son ${ventasTexto(holgura)} ventas al mes de margen. Es un techo, no una meta.`,
+      ? `Para prorrogar el segundo año de tarifa plana hay que quedarse por debajo de ${formatoEuros(UMBRALES.smiAnual)} de rendimiento neto al año (SMI 2026) y vas por ${formatoEuros(c.beneficioAnual)} facturados. Por encima no se puede prorrogar, y si la prorrogaste y lo superas, te regularizan. Esto no es una mala noticia: ganas más de lo que vale la prórroga.`
+      : `SÍ puedes prorrogar el segundo año: hay que quedarse por debajo de ${formatoEuros(UMBRALES.smiAnual)} de rendimiento neto al año (SMI 2026) y tú vas por ${formatoEuros(c.beneficioAnual)} facturados. Te sobran ${formatoEuros(margen)}, que son ${ventasTexto(holgura)} ventas al mes de margen. Es un techo, no una meta.`,
     situacion: superado
       ? 'No hay nada que hacer con esto: el negocio no se frena para pagar menos cuota. Lo que sí cambia es que tienes que contar con la cuota de verdad.'
-      : 'Nada que hacer hoy. Es el dato que dice si te van a conceder la prórroga, no un objetivo que perseguir.',
+      : 'El techo se mide sobre lo que facturas, no sobre el beneficio del negocio: lo que sigue en la caja sin facturar no cuenta contra el SMI. Nada que hacer hoy más que pedir la prórroga a tiempo.',
     queHacer: null,
     urgencia: 'vigilar',
   });
@@ -754,7 +793,8 @@ function hitoDubai(c) {
 // Las usan el hito Y la alerta, para que la misma orden no salga con dos números distintos.
 function estadoReservaImpuestos(c) {
   const reserva = reservaImpuestosDe(c.objetivos);
-  const debido = Math.max(0, num(c.situacionFiscal.irpfRealProyectado, 0));
+  // El IRPF de lo FACTURADO, no el del devengado. Ver `irpfDelAnio` en contexto().
+  const debido = Math.max(0, num(c.irpfDelAnio, 0));
   const devengado = debido * c.fraccionDelAnio;
   return {
     reserva,
@@ -982,11 +1022,13 @@ export function alertas(ctx) {
       `${dias} días`));
   }
 
-  // 2. La reserva de impuestos contra el IRPF real proyectado. El devengado se cuenta con
-  // el mes en curso por días (fraccionDelAnioDevengada): con meses enteros, cada día 1 esta
-  // alerta saltaba de ámbar a rojo sin que cambiara ni un dato.
+  // 2. La reserva de impuestos contra el IRPF real proyectado sobre lo que FACTURA (ver
+  // `irpfDelAnio` en contexto(): con el devengado esta alerta pedía apartar 2.433,36 €
+  // cuando la factura de verdad son 366,63). El devengado del año se cuenta con el mes en
+  // curso por días (fraccionDelAnioDevengada): con meses enteros, cada día 1 esta alerta
+  // saltaba de ámbar a rojo sin que cambiara ni un dato.
   const reserva = reservaImpuestosDe(c.objetivos);
-  const debido = Math.max(0, num(c.situacionFiscal.irpfRealProyectado, 0));
+  const debido = Math.max(0, num(c.irpfDelAnio, 0));
   const devengado = debido * c.fraccionDelAnio;
   if (!(debido > 0)) {
     out.push(alerta('reserva-impuestos', 'verde',

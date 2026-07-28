@@ -246,6 +246,53 @@ export const COSTES_DUBAI = {
 //  · eurPorUsdDerivado: la multiplicación de esas dos cifras que sí están (sección 3.1).
 //    Es una derivación, no un dato: hay que pedirla a mano en `opciones.paraguayEurPorUsd`.
 //  · tipoTecho / estructuraAnual: lo que usa la tabla maestra. Supuesto 5 de la SECCIÓN 6.
+// Lo que cuesta MUDARSE, que no es lo mismo que lo que cuesta vivir allí.
+// Aranceles oficiales vigentes desde el 01/07/2026 (Decreto 6225/2026 y Resolución
+// DNM 478/2026), en guaraníes. SECCIÓN 4.1 del informe.
+// https://migraciones.gov.py/aranceles-migratorios/
+// Están indexados al jornal mínimo (117.077 Gs en 2026) y suben cada julio.
+export const MUDANZA_PARAGUAY = {
+  tramites: [
+    { concepto: 'Residencia temporal', gs: 2926925, nota: '25 jornales' },
+    { concepto: 'Cambio a residencia permanente', gs: 2926925, nota: '25 jornales' },
+    { concepto: 'Cédula de identidad', gs: 8500, nota: 'se retira EN PERSONA, 60 días hábiles' },
+    { concepto: 'Certificado de radicación', gs: 234154, nota: '2 jornales' },
+  ],
+  // Numbeo, no oficial: ~515 EUR/mes sin alquiler + ~408 USD de alquiler de 1 dormitorio
+  // en el centro. SECCIÓN 4 del informe, marcado como FORO/BLOG.
+  costeVidaMensual: 923,
+  costeVidaFuente: 'foro-o-blog',
+  // El MRE sigue publicando 5.000 USD de solvencia en depósito; Migraciones, bajo la Ley
+  // 6984/2022, no lo menciona. Contradicción entre dos fuentes oficiales del mismo Estado:
+  // va como colchón por si acaso, no como certeza. SECCIÓN 4.1.
+  solvenciaDudosaUsd: 5000,
+  mesesDeColchon: 6,
+  vuelos: 2000,
+  imprevistos: 3000,
+};
+
+// ¿Cuánto hay que tener ahorrado ANTES de coger el avión? Es la pregunta que de verdad
+// decide, y no es fiscal: el ahorro necesario es varias veces lo que se ahorra en impuestos
+// el primer año. Devuelve el desglose para poder discutir cada línea.
+export function planMudanzaParaguay(m = MUDANZA_PARAGUAY, eurPorUsd = 0, guaraniesPorUsd = COSTES_PARAGUAY.guaraniesPorUsd) {
+  const cambio = eurPorUsd > 0 ? eurPorUsd : COSTES_PARAGUAY.eurPorUsdDerivado;
+  const enEur = (gs) => (gs / guaraniesPorUsd) * cambio;
+  const tramites = m.tramites.map((t) => ({ ...t, eur: enEur(t.gs) }));
+  const totalTramites = tramites.reduce((a, t) => a + t.eur, 0);
+  const colchonVida = m.costeVidaMensual * m.mesesDeColchon;
+  const solvencia = m.solvenciaDudosaUsd * cambio;
+  const partidas = [
+    { concepto: `${m.mesesDeColchon} meses de vida en Asunción`, eur: colchonVida, seguro: true },
+    { concepto: 'Trámites de residencia', eur: totalTramites, seguro: true },
+    { concepto: 'Vuelos (mínimo dos viajes)', eur: m.vuelos, seguro: true },
+    { concepto: 'Depósito de solvencia, por si lo exigen', eur: solvencia, seguro: false },
+    { concepto: 'Imprevistos', eur: m.imprevistos, seguro: true },
+  ];
+  const minimo = partidas.filter((p) => p.seguro).reduce((a, p) => a + p.eur, 0);
+  const conColchon = partidas.reduce((a, p) => a + p.eur, 0);
+  return { tramites, totalTramites, partidas, minimo, conColchon, costeVidaAnual: m.costeVidaMensual * 12 };
+}
+
 export const COSTES_PARAGUAY = {
   tramos: [
     { hastaGs: 50000000, tipo: 8, usdAprox: 8329 },

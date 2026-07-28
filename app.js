@@ -130,12 +130,18 @@ const split = () => config.config.split;
 const OBJETIVO_LIMPIO_DEFAULT = 3000;
 const CLAVES_MODELO = Object.keys(O.MODELO_DEFAULT);
 
-// El mes que todavía está abierto, 'YYYY-MM'. objetivo.js es un módulo puro y no puede
-// mirar el reloj, así que "hoy" tiene que entrar desde aquí: sin esto, el mes en curso
-// pesaría en la media lo mismo que un mes cerrado y la hundiría cada día 1.
+// El mes que todavía está abierto, 'YYYY-MM', y el día de hoy entero. objetivo.js es un
+// módulo puro y no puede mirar el reloj, así que "hoy" tiene que entrar desde aquí: sin
+// esto, el mes en curso pesaría en la media lo mismo que un mes cerrado y la hundiría cada
+// día 1. El día suelto es lo que deja aplicar la regla de los 15: pasada la mitad del mes,
+// el mes abierto ya cuenta, porque esconderlo hacía que la app dijera 321 € de gastos fijos
+// con el recibo de 934 € de ese mismo mes encima de la mesa.
 function opcionesModelo() {
   const d = new Date();
-  return { mesActual: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` };
+  return {
+    mesActual: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+    hoy: hoyISO(),
+  };
 }
 
 // JSON de localStorage sin reventar si dentro hay basura (una versión vieja, un guardado
@@ -979,7 +985,7 @@ function ctxDecisiones() {
   const hoy = hoyISO();
   const gastosFijos = getGastos();
   return {
-    beneficioAnual: beneficioAnualVivo(mv),
+    beneficioAnual: rentaAnualViva(mv),
     datos: {
       ...datos,
       config: {
@@ -990,6 +996,14 @@ function ctxDecisiones() {
     },
     modelo: mv.modelo,
     ventasMedia: mv.ventasMedia,
+    // DOS fotos fiscales, y no son intercambiables:
+    //   · `rentaFiscal` es lo que FACTURA (los retiros) y es la que manda para TODO lo que
+    //     sea impuestos: es lo único por lo que tributa un autónomo que factura a la empresa
+    //     de su socio. De aquí sale el IRPF de la reserva y el techo de la tarifa plana.
+    //   · `situacionFiscal` es lo DEVENGADO (su 40 % del beneficio del negocio) y se queda
+    //     como informativo: mide el tamaño del negocio y de ahí salen los meses
+    //     transcurridos del año. No se usa para calcular ni un euro de impuesto.
+    rentaFiscal: rentaFiscalViva(mv, hoy),
     situacionFiscal: O.situacionFiscalDelAnio(datos, mv.modelo, hoy),
     patrimonio: getPatrimonio(),
     residencia: getResidencia(),
@@ -1047,8 +1061,13 @@ function renderVista(v) {
     });
   } else if (v === 'residencia') {
     const mv = modeloVivo();
+    const rf = rentaFiscalViva(mv, hoyISO());
     renderResidencia({
-      beneficioAnual: beneficioAnualVivo(mv),
+      // Lo que él factura, no el beneficio del negocio: la comparación entre países es
+      // sobre SU tributación, y un autónomo tributa por lo que factura. El beneficio
+      // devengado viaja aparte para que la pantalla pueda decirlo en voz alta.
+      beneficioAnual: rf.retiradoProyectado,
+      devengadoAnual: rf.transcurrido > 0 ? (rf.devengadoYtd / rf.transcurrido) * 12 : 0,
       opciones: getResidencia(),
       // El modelo del negocio viaja para poder traducir los umbrales a ventas al mes, que
       // es lo único de todo esto que él controla de verdad. Sin él la vista se calla esa
@@ -1062,26 +1081,39 @@ function renderVista(v) {
   postRender(v);
 }
 
-// EL beneficio ANUAL de la app. Uno solo, calculado en un sitio, y el mismo para todas las
+// La foto fiscal buena: lo que de verdad FACTURA, calculada una sola vez y compartida por
+// "Y ahora qué" y "Dónde vivir".
+function rentaFiscalViva(mv, hoy) {
+  return O.rentaFiscalDelAnio(datos, mv.modelo, hoy);
+}
+
+// LA renta ANUAL de la app. Una sola, calculada en un sitio, y la misma para todas las
 // pantallas que comparan contra un umbral: los hitos de "Y ahora qué", el bloque de países
 // de esa misma pestaña y la tabla entera de "Dónde vivir".
 //
-// Antes había dos. "Y ahora qué" usaba `resultadoMensual(modelo, ventasMedia).miParte * 12`
-// y "Dónde vivir" proyectaba el año en curso desde `situacionFiscalDelAnio`. Con los mismos
-// datos salían 12.962,86 € y 15.484,53 €: un 19,5 % de diferencia, y justo a los dos lados
-// del umbral de Paraguay (15.000). A un toque de distancia, la app contestaba dos cosas
-// opuestas a la misma pregunta: "te faltan 0,3 ventas al mes para que Paraguay te compense"
-// y "Paraguay es el país que más te deja".
+// QUÉ ES Y QUÉ NO ES. Es lo que él FACTURA al año, proyectado desde los retiros que lleva
+// hechos. NO es su 40 % del beneficio del negocio. Él no es socio de una sociedad española
+// que le reparte beneficios: es un autónomo español que factura a la empresa alemana de su
+// socio, y solo tributa por lo que factura. Lo que no ha facturado sigue en la caja del
+// negocio y no es renta suya todavía.
 //
-// Manda la magnitud de "Y ahora qué" por dos razones: es la que sostiene toda la traducción
-// a ventas al mes de decisiones.js (los euros y las ventas tienen que decir lo mismo del
-// mismo umbral), y sale de los meses CERRADOS, así que no se mueve sola cada día 1.
+// A 28/07/2026 la diferencia entre las dos lecturas no es de matiz: su 40 % del beneficio
+// va por 10.937,35 € y lo facturado por 5.372,80 €. Proyectado a diciembre, 19.012,59 €
+// contra 9.339,63 €. Con la primera cifra la app lo metía en el tramo del 24 %, le pedía
+// apartar 2.433,36 € de IRPF y le decía que la prórroga de la tarifa plana ya no le cabía;
+// con la segunda está en el PRIMER tramo (19 %), paga 366,63 € (un 4,9 % efectivo) y la
+// prórroga sí le cabe, con 7.754,37 € de margen. Tres respuestas cambiadas de signo.
 //
-// Ojo con lo que incluye: es su parte del beneficio del negocio, antes de cuota de autónomo
-// y de impuestos (eso lo resta cada escenario a su manera) y después de los gastos del
-// NEGOCIO. La asesoría personal no está descontada aquí; la pantalla lo dice.
-function beneficioAnualVivo(mv) {
-  const b = O.resultadoMensual(mv.modelo, mv.ventasMedia).miParte * 12;
+// El devengado no desaparece: vive en `situacionFiscal` y las pantallas lo enseñan al lado,
+// porque la renta de un autónomo se imputa por DEVENGO y su asesoría puede decirle que
+// debería estar facturando más. La app no puede resolver eso: enseña las dos y dice cuál usa.
+//
+// Antes esto era `resultadoMensual(modelo, ventasMedia).miParte * 12` -el beneficio del
+// negocio-, y por eso hacía falta esta misma nota para explicar que "Dónde vivir" y "Y ahora
+// qué" no dijeran dos cifras distintas del mismo umbral. Sigue habiendo una sola cifra; lo
+// que ha cambiado es cuál.
+function rentaAnualViva(mv) {
+  const b = rentaFiscalViva(mv, hoyISO()).retiradoProyectado;
   return Number.isFinite(b) ? b : 0;
 }
 function cambiarVista(v) {

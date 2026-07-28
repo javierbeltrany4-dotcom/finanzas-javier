@@ -9,7 +9,7 @@
 //   · los deducibles (asesoría) se restan ANTES del IRPF y los gastos personales
 //     (gimnasio) DESPUÉS, porque Hacienda no los admite.
 
-import { formatoEuros, ventasNetasEntre, gastosEntre } from './calculos.js';
+import { formatoEuros, ventasNetasEntre, gastosEntre, retirosEntre } from './calculos.js';
 
 // Valores reales del negocio a julio de 2026. Cambiarlos aquí cambia todo el módulo.
 export const MODELO_DEFAULT = {
@@ -298,6 +298,25 @@ function ventanaMeses(listas, n) {
   return rango;
 }
 
+// A partir de qué día del mes el mes en curso ya cuenta como un mes más de la ventana.
+//
+// POR QUÉ EXISTE ESTE NÚMERO. Dejar el mes abierto SIEMPRE fuera parecía lo prudente y
+// resultó ser lo contrario: a 28/07/2026, con los gastos reales del negocio en
+// 293,86 (abril) · 368,30 (mayo) · 675,66 (junio) · 934,17 (julio), la ventana cerrada
+// (abril-junio, sin comisiones) daba 320,94 EUR/mes de fijos mientras el mes que se estaba
+// viviendo ya iba por 934,17. La pantalla decía que el negocio cuesta 321 al mes con el
+// recibo de 934 encima de la mesa: el punto muerto, la cascada y las palancas salían todos
+// baratos de más, y el error crecía justo cuando los gastos suben.
+//
+// El corte en 15 es el punto en el que el mes ya ha contado más de la mitad de sus días:
+// por debajo, meterlo en el denominador como un mes entero hunde la media (dos días flojos
+// valdrían lo mismo que un mes de treinta); por encima, dejarlo fuera esconde lo que de
+// verdad está pasando. Sigue siendo un mes incompleto contado como completo, así que en la
+// segunda quincena la media de VENTAS sale conservadora a propósito: preferimos pedir de
+// más que prometer de menos. Y la pantalla enseña las dos cifras por separado (la media de
+// la ventana y el mes en curso suelto) para que nadie tenga que fiarse de una sola.
+const DIA_PARA_CONTAR_EL_MES_EN_CURSO = 15;
+
 // Rellena el modelo con lo que de verdad ha pasado: los fijos son la media real de
 // los últimos 3 meses (comisiones aparte) y las ventas, las que hubo de media.
 // Si no llegan datos no se inventa nada: se queda con los valores de `base`.
@@ -305,6 +324,10 @@ function ventanaMeses(listas, n) {
 // `opciones.mesActual` ('YYYY-MM') es el mes que todavía está abierto. El módulo es puro
 // y no puede mirar el reloj, así que "hoy" entra por aquí, desde quien sí lo tiene.
 // Sin él el comportamiento es el de siempre: cuenta todo lo que llegue.
+//
+// `opciones.hoy` ('YYYY-MM-DD') es lo mismo pero con el día dentro, y es lo que permite
+// aplicar la regla de los 15 días de arriba. Si solo llega `mesActual` no hay día que
+// mirar y el mes en curso se queda fuera, que es la conducta de siempre.
 export function modeloDesdeDatos(datos, base = MODELO_DEFAULT, opciones) {
   const b = normalizarModelo(base);
   const d = datos || {};
@@ -314,9 +337,18 @@ export function modeloDesdeDatos(datos, base = MODELO_DEFAULT, opciones) {
 
   // El mes en curso no ha terminado: si el día 3 lleva una venta, pesaría en el
   // denominador lo mismo que un mes cerrado de diez y hundiría la media justo el día que
-  // se abre la app. Se deja fuera... salvo que no quede ningún mes cerrado con datos:
-  // entonces es mejor un mes a medias que una pantalla vacía, y se dice en el texto.
-  const mesActual = /^\d{4}-\d{2}$/.test(String(o.mesActual ?? '')) ? String(o.mesActual) : '';
+  // se abre la app. Se deja fuera... salvo que ya lleve más de medio mes andado (ver
+  // DIA_PARA_CONTAR_EL_MES_EN_CURSO) o que no quede ningún mes cerrado con datos: entonces
+  // es mejor un mes a medias que una pantalla vacía, y se dice en el texto.
+  const hoy = /^\d{4}-\d{2}-\d{2}$/.test(String(o.hoy ?? '')) ? String(o.hoy) : '';
+  const mesActual = /^\d{4}-\d{2}$/.test(String(o.mesActual ?? ''))
+    ? String(o.mesActual)
+    : (hoy ? hoy.slice(0, 7) : '');
+  // El día solo vale si es el día DE ese mes: un `hoy` de otro mes distinto del que se dice
+  // abierto no puede decidir si ese mes está medio andado o recién empezado.
+  const diaDelMes = hoy && mesActual === hoy.slice(0, 7) ? Number(hoy.slice(8, 10)) : 0;
+  const mesEnCursoYaCuenta = Number.isFinite(diaDelMes) && diaDelMes > DIA_PARA_CONTAR_EL_MES_EN_CURSO;
+
   const esAbierto = (x) => {
     const mes = mesFila(x);
     return Boolean(mesActual) && Boolean(mes) && mes >= mesActual;
@@ -325,7 +357,7 @@ export function modeloDesdeDatos(datos, base = MODELO_DEFAULT, opciones) {
   const hayAbierto = gastos.some(esAbierto) || ventas.some(esAbierto);
   const hayCerrado = gastos.some((g) => conFecha(g) && !esAbierto(g))
     || ventas.some((v) => conFecha(v) && !esAbierto(v));
-  const fueraElAbierto = hayAbierto && hayCerrado;
+  const fueraElAbierto = hayAbierto && hayCerrado && !mesEnCursoYaCuenta;
   const filtrar = (lista) => (fueraElAbierto ? lista.filter((x) => !esAbierto(x)) : lista);
   const gastosVentana = filtrar(gastos);
   const ventasVentana = filtrar(ventas);
@@ -346,6 +378,18 @@ export function modeloDesdeDatos(datos, base = MODELO_DEFAULT, opciones) {
     fuenteFijos = 'datos';
   }
 
+  // El mes en curso SUELTO, con la misma vara que la media (sin comisiones). No entra en
+  // ningún cálculo: existe para poder enseñarlo al lado de la media y que se vea de un
+  // vistazo si el mes que se está viviendo se ha ido por encima. `null` cuando no hay mes
+  // abierto que mirar o cuando todavía no ha llegado ni un gasto suyo: un 0 se leería como
+  // "este mes no has gastado nada", que es una afirmación, no una ausencia de dato.
+  const gastosDelMesEnCurso = mesActual ? gastos.filter((g) => mesFila(g) === mesActual) : [];
+  const fijosMesEnCurso = gastosDelMesEnCurso.length
+    ? gastosDelMesEnCurso
+      .filter((g) => !esComision(g))
+      .reduce((acc, g) => acc + num(g && g.total, 0), 0)
+    : null;
+
   const ventasDentro = ventasVentana.filter(enVentana);
   let ventasMedia = 0;
   let fuenteVentas = 'defecto';
@@ -365,6 +409,8 @@ export function modeloDesdeDatos(datos, base = MODELO_DEFAULT, opciones) {
   ];
   if (fueraElAbierto) {
     textos.push(`El mes en curso (${mesActual}) no cuenta todavía: aún no ha terminado`);
+  } else if (hayAbierto && mesEnCursoYaCuenta) {
+    textos.push(`Incluye el mes en curso (${mesActual}), que ya lleva más de ${DIA_PARA_CONTAR_EL_MES_EN_CURSO} días: cuenta entero y la media se moverá`);
   } else if (hayAbierto) {
     textos.push(`Incluye el mes en curso (${mesActual}), que aún no ha terminado: la media se moverá`);
   }
@@ -379,6 +425,11 @@ export function modeloDesdeDatos(datos, base = MODELO_DEFAULT, opciones) {
       mesesVentas: meses,
       mesEnCurso: mesActual || null,
       incluyeMesEnCurso: hayAbierto && !fueraElAbierto,
+      // Las dos cifras que la pantalla enseña juntas en Ajustes: la media de la ventana (la
+      // que de verdad se usa) y lo que lleva el mes abierto. Ver DIA_PARA_CONTAR_EL_MES_EN_CURSO.
+      fijosMedia: fuenteFijos === 'datos' ? fijosNegocio : null,
+      fijosMesEnCurso,
+      diaDelMes: diaDelMes || null,
       texto: textos.join(' · '),
     },
   };
@@ -408,8 +459,27 @@ export const TRAMOS_IRPF = [
   { hasta: Infinity, tipo: 47 },
 ];
 
+// La misma escala pero con los DOS límites de cada tramo, para poder pintarla entera en
+// pantalla sin que la vista tenga que reconstruir los "desde" a mano (y equivocarse).
+// El último tramo no tiene techo: su `hasta` es Infinity, y así se dice en vez de
+// inventarse un número redondo que no existe en la ley.
+export const TRAMOS_IRPF_TEXTO = TRAMOS_IRPF.map((t, i) => ({
+  desde: i === 0 ? 0 : TRAMOS_IRPF[i - 1].hasta,
+  hasta: t.hasta,
+  tipo: t.tipo,
+}));
+
 // Mínimo personal: el primer tramo de renta que no tributa (soltero, sin hijos).
 export const MINIMO_PERSONAL = 5550;
+
+// SMI 2026 = 1.221 EUR/mes en 14 pagas. Es el techo de rendimiento neto anual por debajo
+// del cual se puede PRORROGAR el segundo año de tarifa plana (80 EUR/mes de cuota).
+// FUENTE: docs/investigacion-fiscal-2026.md, secciones 2.2 y 7.5
+//         (art. 38 ter Ley 20/2007 · RD 126/2026).
+// Es el mismo número que decisiones.js expone como UMBRALES.smiAnual. No se importa de
+// allí porque decisiones.js ya importa de aquí y sería un ciclo; hay un test que comprueba
+// que las dos copias siguen diciendo lo mismo.
+export const SMI_ANUAL = 17094;
 
 // Cuota íntegra de una base, recorriendo la escala tramo a tramo.
 function cuotaEscala(base, tramos) {
@@ -540,8 +610,58 @@ function indiceTramo(baseAnual, tramos = TRAMOS_IRPF) {
   return t.length - 1;
 }
 
-// La foto fiscal del año EN CURSO, calculada sola a partir de los datos reales de
-// Tradingverso: nada de pedirle al usuario un porcentaje que se puede derivar.
+// Dónde cae exactamente una base dentro de la escala, con las dos distancias que hacen
+// falta para decirlo en una frase: cuánto sobra del tramo anterior y cuánto falta para el
+// siguiente. Sin esto la pantalla solo puede decir "estás en el 19 %", que no ayuda a
+// decidir; con esto puede decir "te faltan 4.970 € para entrar en el 24 %".
+//
+// La frontera pertenece al tramo de ABAJO: con 12.450 € clavados se está en el 19 %, no en
+// el 24 %, y `faltaParaElSiguiente` es 0. Es el mismo criterio que usa tipoMarginal, así
+// que las dos funciones nunca se contradicen.
+// En el último tramo no hay siguiente: `faltaParaElSiguiente` va null, no Infinity, porque
+// la pantalla tiene que poder distinguir "te falta muchísimo" de "no hay más escalera".
+export function tramoDe(base, tramos = TRAMOS_IRPF) {
+  const t = Array.isArray(tramos) && tramos.length ? tramos : TRAMOS_IRPF;
+  const b = Math.max(0, num(base, 0));
+  const indice = indiceTramo(b, t);
+  const desde = indice === 0 ? 0 : t[indice - 1].hasta;
+  const hasta = t[indice].hasta;
+  return {
+    indice,
+    tipo: t[indice].tipo,
+    desde,
+    hasta,
+    faltaParaElSiguiente: Number.isFinite(hasta) ? hasta - b : null,
+    sobraDelAnterior: b - desde,
+  };
+}
+
+// Meses transcurridos del año CON DECIMALES: los meses ya cerrados más la fracción del que
+// está en curso. Con meses enteros, el día 1 de cada mes el divisor sube de golpe mientras
+// los ingresos del mes nuevo aún son cero: la proyección se desplomaba un 19 % de un día
+// para otro y parecía que el negocio se hundía. Contando la fracción, la curva es continua.
+//
+// `hoy` ya viene validado contra /^\d{4}-\d{2}-\d{2}$/ y `meses` está entre 1 y 12, así que
+// aquí no hay NaN posible. El día sí se acota a un día real del mes: '2026-01-00' pasa el
+// regex y dejaba el divisor en 0 (proyección infinita), y un 31 de febrero contaría de más.
+function transcurridoDelAnio(hoy, meses) {
+  const diasDelMes = new Date(Date.UTC(Number(hoy.slice(0, 4)), meses, 0)).getUTCDate();
+  const dia = Math.min(Math.max(Number(hoy.slice(8, 10)), 1), diasDelMes);
+  return (meses - 1) + dia / diasDelMes;
+}
+
+// La foto del año EN CURSO por DEVENGO: su 40 % del beneficio del negocio, tenga o no
+// tenga ese dinero en la mano.
+//
+// CUIDADO: esto NO es su base fiscal y no hay que enseñarlo como tal. Él es un autónomo
+// español que FACTURA a la empresa alemana de su socio, y solo tributa por lo que factura;
+// el 40 % del beneficio que no ha facturado sigue en la caja del negocio y no es renta
+// suya todavía. Para la base fiscal de verdad está `rentaFiscalDelAnio`, que parte de los
+// retiros. Esta función se queda porque el devengado es la otra mitad de la historia (mide
+// el tamaño real del negocio y lo que le quedaría por facturar), y porque las pantallas de
+// "Dónde vivir" y "Decisiones" comparan escenarios con ella. Se distingue por el campo
+// `esDevengado: true`.
+//
 // Del año de `hoyISO` ('YYYY-MM-DD') se toma lo que va del 1 de enero hasta hoy,
 // se anualiza a ritmo constante y se pasa por la escala por tramos.
 //   · beneficioYtd  = ventas netas − gastos del negocio, del 1 de enero a hoy
@@ -580,6 +700,7 @@ export function situacionFiscalDelAnio(datos, m, hoyISO, tramos = TRAMOS_IRPF, m
       diferencia: 0,
       tramo: 0,
       mesesTranscurridos: meses >= 1 && meses <= 12 ? meses : 0,
+      esDevengado: true,
     };
   }
 
@@ -588,13 +709,7 @@ export function situacionFiscalDelAnio(datos, m, hoyISO, tramos = TRAMOS_IRPF, m
   const miParteYtd = beneficioYtd * (x.miShare / 100);
   const baseYtd = miParteYtd - (x.cuotaAutonomo + x.deducibles) * meses;
 
-  // Tiempo transcurrido en meses CON DECIMALES. Con meses enteros, el día 1 de cada mes
-  // el divisor sube de golpe mientras los ingresos del mes nuevo aún son cero: la
-  // proyección se desplomaba un 19 % de un día para otro y parecía que el negocio se
-  // hundía. Contando la fracción del mes en curso, la curva es continua.
-  const diaDelMes = Number(hoy.slice(8, 10));
-  const diasDelMes = new Date(Date.UTC(Number(hoy.slice(0, 4)), meses, 0)).getUTCDate();
-  const transcurrido = (meses - 1) + diaDelMes / diasDelMes;
+  const transcurrido = transcurridoDelAnio(hoy, meses);
   const baseProyectada = (baseYtd / transcurrido) * 12;
 
   const irpfRealProyectado = irpfPorTramos(baseProyectada, tramos, minimoPersonal);
@@ -612,6 +727,124 @@ export function situacionFiscalDelAnio(datos, m, hoyISO, tramos = TRAMOS_IRPF, m
     diferencia: retenidoProyectado - irpfRealProyectado,
     tramo: indiceTramo(baseProyectada, tramos),
     mesesTranscurridos: meses,
+    // La etiqueta que evita confundir esta foto con la base fiscal: aquí se cuenta lo
+    // devengado (su 40 % del beneficio), no lo facturado. Ver rentaFiscalDelAnio.
+    esDevengado: true,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// La renta que de verdad tributa: lo FACTURADO, no el 40 % del beneficio
+// ---------------------------------------------------------------------------
+//
+// El error que corrige esta función: él no es socio de una sociedad española que le
+// reparte beneficios. Es un AUTÓNOMO español que FACTURA a la empresa alemana de su socio.
+// Su renta no es "su 40 % del beneficio del negocio": es lo que factura, y factura cuando
+// retira. Lo que no ha retirado sigue en la caja del negocio y no es renta suya todavía.
+//
+// A 28/07/2026 las dos lecturas se separan 5.564,55 EUR:
+//   · su 40 % del beneficio (devengado) : 10.937,35  <- lo que usaba todo el modelo
+//   · lo que ha retirado y facturado    :  5.372,80  <- su renta real
+// Y no es un matiz de presentación: con la primera cifra la proyección anual sale en
+// 18.234 EUR, tramo del 24 % y la tarifa plana ya no se puede prorrogar; con la segunda
+// sale en 9.339,63 EUR, tramo del 19 %, un 4,9 % efectivo, y la prórroga sí cabe.
+//
+// EL MATIZ HONESTO, que la app no puede resolver sola: la renta de un autónomo se imputa
+// por DEVENGO, no por cobro. Si tiene derecho contractual al 40 % y no lo factura, su
+// asesoría puede decirle que debería estar facturando más. Por eso esta función devuelve
+// LAS DOS cifras (`retiradoYtd` y `devengadoYtd`) y lo que las separa (`sinFacturar`): la
+// pantalla las enseña juntas y dice cuál se usa para los impuestos. Aquí se usa la
+// facturada, que es la que hoy aparece en sus declaraciones.
+//
+// Bordes: sin datos del año (o con la fecha inválida) todo va a 0 y tramo 0, nunca un NaN;
+// con un solo mes (enero) la proyección funciona igual; solo cuenta el año de `hoyISO`.
+export function rentaFiscalDelAnio(datos, m, hoyISO, tramos = TRAMOS_IRPF, minimoPersonal = MINIMO_PERSONAL) {
+  const x = normalizarModelo(m);
+  const d = datos || {};
+  const ventas = Array.isArray(d.ventas) ? d.ventas : [];
+  const gastos = Array.isArray(d.gastosNegocio) ? d.gastosNegocio : [];
+  const retiros = Array.isArray(d.retiros) ? d.retiros : [];
+  const share = x.miShare / 100;
+
+  const hoy = /^\d{4}-\d{2}-\d{2}$/.test(String(hoyISO ?? '')) ? String(hoyISO) : '';
+  const meses = hoy ? Number(hoy.slice(5, 7)) : 0;
+  const delAnio = (f) => String((f && f.fecha) ?? '').slice(0, 4) === hoy.slice(0, 4);
+  const hayDatos = Boolean(hoy)
+    && (retiros.some(delAnio) || ventas.some(delAnio) || gastos.some(delAnio));
+
+  // Sin datos de este año no hay renta que proyectar: todo a cero en vez de anualizar las
+  // cuotas de meses sobre los que no sabemos nada. `puedeProrrogarTarifaPlana` va null y no
+  // true: sin rendimiento estimado no es que quepa la prórroga, es que no se sabe.
+  if (!hayDatos || !(meses >= 1 && meses <= 12)) {
+    return {
+      retiradoYtd: 0,
+      devengadoYtd: 0,
+      sinFacturar: 0,
+      transcurrido: 0,
+      mesesTranscurridos: meses >= 1 && meses <= 12 ? meses : 0,
+      retiradoProyectado: 0,
+      baseIrpf: 0,
+      irpfReal: 0,
+      tipoMedio: 0,
+      tipoMarginal: tipoMarginal(0, tramos),
+      tramo: 0,
+      retenidoProyectado: 0,
+      diferencia: 0,
+      puedeProrrogarTarifaPlana: null,
+      esDevengado: false,
+    };
+  }
+
+  const eneroUno = `${hoy.slice(0, 4)}-01-01`;
+
+  // Del origen los importes llegan siempre numéricos (tradinverso.js hace `Number(...) || 0`),
+  // pero una copia de seguridad editada a mano puede traer uno en texto. Una fila rota tiene
+  // que valer 0 ELLA SOLA: si dejáramos que el NaN se propagara, la foto fiscal entera se
+  // volvería ilegible, y si lo cazáramos al final del sumatorio, una fila mala borraría el
+  // año completo y la pantalla diría "no debes nada" con toda la confianza.
+  const limpiar = (lista, campo) => lista.map((f) => ({
+    fecha: String((f && f.fecha) ?? ''),
+    [campo]: num(f && f[campo], 0),
+  }));
+
+  // Su renta: los retiros del año hasta hoy, por su parte. El importe apuntado en la hoja
+  // es el reparto ENTERO (los dos socios); lo suyo es el miShare de ese total.
+  const retiradoYtd = retirosEntre(limpiar(retiros, 'total'), eneroUno, hoy) * share;
+
+  // Informativo, la otra mitad de la historia: lo que le habría tocado por contrato.
+  const beneficioYtd = ventasNetasEntre(limpiar(ventas, 'neto'), eneroUno, hoy)
+    - gastosEntre(limpiar(gastos, 'total'), eneroUno, hoy);
+  const devengadoYtd = beneficioYtd * share;
+
+  const transcurrido = transcurridoDelAnio(hoy, meses);
+  const retiradoProyectado = (retiradoYtd / transcurrido) * 12;
+
+  // La cuota de autónomo y la asesoría son gasto deducible de los doce meses del año, se
+  // haya facturado mucho o poco. Si aún no ha facturado casi nada la base sale negativa:
+  // es una pérdida real del ejercicio, no un error, y el IRPF de una base negativa es 0.
+  const baseIrpf = retiradoProyectado - (x.cuotaAutonomo + x.deducibles) * 12;
+
+  const irpfReal = irpfPorTramos(baseIrpf, tramos, minimoPersonal);
+  const retenidoProyectado = Math.max(0, baseIrpf) * (x.irpf / 100);
+
+  return {
+    retiradoYtd,
+    devengadoYtd,
+    sinFacturar: devengadoYtd - retiradoYtd,
+    transcurrido,
+    mesesTranscurridos: meses,
+    retiradoProyectado,
+    baseIrpf,
+    irpfReal,
+    tipoMedio: tipoMedioReal(baseIrpf, tramos, minimoPersonal),
+    tipoMarginal: tipoMarginal(baseIrpf, tramos),
+    tramo: indiceTramo(baseIrpf, tramos),
+    retenidoProyectado,
+    diferencia: retenidoProyectado - irpfReal,
+    // El techo se mide sobre el RENDIMIENTO del año, que es lo que se factura, no sobre el
+    // beneficio del negocio. Con el devengado el código decía que no podía prorrogar.
+    puedeProrrogarTarifaPlana: retiradoProyectado < SMI_ANUAL,
+    esDevengado: false,
   };
 }
 

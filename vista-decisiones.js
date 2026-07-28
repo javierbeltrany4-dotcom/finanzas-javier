@@ -120,8 +120,10 @@ function set(id, html) {
 // El contexto de la pantalla
 // ---------------------------------------------------------------------------
 //
-// ctx = { datos, modelo, situacionFiscal, patrimonio, residencia, hoyISO, ventasMedia,
-//         gastosFijos, tarifaPlana, f, card }
+// ctx = { datos, modelo, beneficioAnual, rentaFiscal, situacionFiscal, patrimonio,
+//         residencia, hoyISO, ventasMedia, gastosFijos, tarifaPlana, f, card }
+// `rentaFiscal` (lo que factura) manda para los impuestos; `situacionFiscal` (lo devengado)
+// se queda como informativo.
 //
 // El ctx entero se le pasa TAL CUAL a decisiones.js: es su contrato, no el de esta vista.
 // Lo que se prepara aquí es solo lo que la vista necesita por su cuenta para el bloque de
@@ -148,11 +150,15 @@ function prepararCtx(ctx) {
     hoy,
     ventasMedia,
     miParteMes,
-    // EL beneficio anual, uno solo para toda la app. Llega por ctx desde app.js, que se lo
-    // pasa igual a esta pantalla, a decisiones.js y a "Dónde vivir". Antes cada pestaña lo
+    // LA renta anual, una sola para toda la app. Llega por ctx desde app.js, que se la pasa
+    // igual a esta pantalla, a decisiones.js y a "Dónde vivir". Antes cada pestaña la
     // calculaba por su cuenta y salían dos cifras con un 19 % de diferencia: los hitos
     // decían "te faltan 0,3 ventas al mes para que Paraguay te compense" mientras la
-    // pestaña de al lado ya lo daba por cruzado. Si no llega, sale de la media de ventas.
+    // pestaña de al lado ya lo daba por cruzado.
+    //
+    // Y es lo que él FACTURA, no su 40 % del beneficio del negocio: un autónomo español
+    // tributa por lo que factura, y los umbrales de estas tarjetas son fiscales. Si no
+    // llega, sale de la media de ventas, que es lo único reconstruible desde aquí.
     beneficioAnual: Number.isFinite(Number(c.beneficioAnual))
       ? Number(c.beneficioAnual)
       : miParteMes * 12,
@@ -577,18 +583,18 @@ function pintarPaises(c) {
   // ve lo que cuesta cada sitio cuando no entra dinero.
   let titular;
   if (!ganador) {
-    titular = 'Todavía no hay beneficio con el que comparar países.';
+    titular = 'Todavía no hay facturación con la que comparar países.';
   } else if (b > 0) {
-    titular = `Con ${esc(euros(f, b))} de beneficio al año, el país que más te deja es <strong>${esc(NOMBRE_PAIS[ganador.escenario])}</strong>: ${esc(euros(f, ganador.neto))} limpios.`;
+    titular = `Con ${esc(euros(f, b))} facturados al año, el país que más te deja es <strong>${esc(NOMBRE_PAIS[ganador.escenario])}</strong>: ${esc(euros(f, ganador.neto))} limpios.`;
   } else {
-    titular = `A tu ritmo de ahora el negocio no te deja beneficio al año, así que mudarte no cambiaría lo que ganas: solo lo que cuesta la estructura de cada sitio. Esta pregunta se contesta sola en cuanto el beneficio sea positivo.`;
+    titular = `A tu ritmo de ahora no estás facturando nada al año, así que mudarte no cambiaría lo que ganas: solo lo que cuesta la estructura de cada sitio. Esta pregunta se contesta sola en cuanto empieces a facturar.`;
   }
 
   // Y el aviso que evita el consejo imposible: si Bali sale bien en la tabla pero el
   // visado no se te abre, se dice aquí y no en la letra pequeña.
   const bali = todos.find((x) => x.escenario === 'bali');
   const avisoBali = bali && !bali.detalle.califica
-    ? `<p class="dec-paises-aviso">Bali está en gris a propósito: el visado E33G exige acreditar ${eurosCortos(UMBRALES_BALI.legal)} al año de ingresos y hoy vas por ${eurosCortos(b)}. Por debajo de ahí Bali no es una opción cara, es que no existe.</p>`
+    ? `<p class="dec-paises-aviso">Bali está en gris a propósito: el visado E33G exige acreditar ${eurosCortos(UMBRALES_BALI.legal)} al año de ingresos y hoy facturas ${eurosCortos(b)}. Y lo que hay que acreditar con extractos es lo que TE ENTRA a ti, no lo que factura el negocio de tu socio. Por debajo de ahí Bali no es una opción cara, es que no existe.</p>`
     : '';
 
   const cambio = cambioDeGanador(b, o);
@@ -607,7 +613,7 @@ function pintarPaises(c) {
     <div class="dec-paises">${filas}</div>
     ${avisoBali}
     ${siguiente}
-    <p class="dec-pie">Solo impuestos y estructura: no incluye lo que cuesta vivir en cada sitio, que puede darle la vuelta a todo. El beneficio con el que se compara es el mismo aquí, en los hitos de arriba y en "Dónde vivir": una sola cifra para toda la app, para que no haya dos respuestas a la misma pregunta.
+    <p class="dec-pie">Solo impuestos y estructura: no incluye lo que cuesta vivir en cada sitio, que puede darle la vuelta a todo. Y se compara con lo que TÚ facturas, no con el beneficio del negocio: mudarte cambia tu tributación, no la del negocio de tu socio. Es la misma cifra aquí, en los hitos de arriba y en "Dónde vivir": una sola para toda la app, para que no haya dos respuestas a la misma pregunta.
       <button type="button" class="btn btn-ghost dec-ir" data-ir="residencia">Ver el detalle en "Dónde vivir"</button></p>`;
 }
 
@@ -615,8 +621,10 @@ function pintarPaises(c) {
 // Render público
 // ---------------------------------------------------------------------------
 
-// ctx = { datos, modelo, situacionFiscal, patrimonio, residencia, hoyISO, ventasMedia,
-//         gastosFijos, tarifaPlana, f, card }
+// ctx = { datos, modelo, beneficioAnual, rentaFiscal, situacionFiscal, patrimonio,
+//         residencia, hoyISO, ventasMedia, gastosFijos, tarifaPlana, f, card }
+// `rentaFiscal` (lo que factura) manda para los impuestos; `situacionFiscal` (lo devengado)
+// se queda como informativo.
 export function renderDecisiones(ctx) {
   const c = prepararCtx(ctx);
 
