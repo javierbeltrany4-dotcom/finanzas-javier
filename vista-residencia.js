@@ -260,31 +260,42 @@ function pintarMioForm(c) {
     ? `<button type="button" class="btn btn-ghost" id="res-beneficio-reset">Volver a mi cifra real (${eurosCortos(c.beneficioReal)})</button>`
     : '';
 
-  // Al mes o al año: el mismo número por doce. Él piensa en meses («este mes me llevé X»)
-  // y todo lo fiscal va en años, así que la pantalla acepta las dos y enseña siempre las dos.
-  const alMes = periodoMensual;
-  const valor = alMes ? c.beneficio / 12 : c.beneficio;
-  const otra = alMes ? c.beneficio : c.beneficio / 12;
+  // A la semana, al mes o al año: el mismo número, distinto divisor. Él piensa en semanas
+  // y meses («esta semana me llevé X»); todo lo fiscal va en años. La pantalla acepta las
+  // tres y enseña SIEMPRE las otras dos, para que no tenga que hacer la cuenta de cabeza.
+  const p = PERIODOS[periodoElegido] || PERIODOS.anio;
+  const valor = c.beneficio / p.divisor;
+  const otros = Object.keys(PERIODOS)
+    .filter((k) => k !== periodoElegido)
+    .map((k) => `<strong>${euros(c.f, c.beneficio / PERIODOS[k].divisor)}</strong> ${PERIODOS[k].sufijo}`);
+
+  const chips = Object.entries(PERIODOS).map(([k, v]) =>
+    `<button type="button" data-periodo="${k}"${k === periodoElegido ? ' class="on"' : ''}>${v.etiqueta}</button>`).join('');
 
   return `<div id="res-mio-res"></div>
     <div class="res-probar">
       <label class="res-probar-l" for="res-beneficio">Probar otra cifra que ganes tú</label>
-      <div class="seg res-periodo" id="res-periodo">
-        <button type="button" data-periodo="mes"${alMes ? ' class="on"' : ''}>Al mes</button>
-        <button type="button" data-periodo="anio"${alMes ? '' : ' class="on"'}>Al año</button>
-      </div>
+      <div class="seg res-periodo" id="res-periodo">${chips}</div>
       <input id="res-beneficio" class="res-probar-input" type="number" inputmode="decimal"
-        step="${alMes ? 50 : 500}" min="0"
-        value="${esc(paraInput(valor))}" placeholder="${alMes ? '780' : '9340'}"
-        aria-label="Lo que ganas tú, ${alMes ? 'al mes' : 'al año'}, en euros" />
-      <p class="mc res-equivale">Son <strong>${euros(c.f, otra)}</strong> ${alMes ? 'al año' : 'al mes'}.</p>
+        step="${p.paso}" min="0"
+        value="${esc(paraInput(valor))}" placeholder="${p.ejemplo}"
+        aria-label="Lo que ganas tú ${p.sufijo}, en euros" />
+      <p class="mc res-equivale">Son ${otros.join(' · ')}.</p>
       <div class="obj-rapidos">${rapidos}${volver}</div>
     </div>`;
 }
 
-// Periodo elegido en el selector. Vive a nivel de módulo, como el modo de la cascada:
-// sobrevive a los repintados y no se pierde al escribir.
-let periodoMensual = false;
+// Las tres formas de mirar el mismo dinero. 52 semanas, no 4 por mes: un mes tiene 4,33
+// semanas y con 4 el año se quedaría corto en un mes entero.
+const PERIODOS = {
+  semana: { etiqueta: 'A la semana', divisor: 52, sufijo: 'a la semana', paso: 25, ejemplo: '180' },
+  mes: { etiqueta: 'Al mes', divisor: 12, sufijo: 'al mes', paso: 50, ejemplo: '780' },
+  anio: { etiqueta: 'Al año', divisor: 1, sufijo: 'al año', paso: 500, ejemplo: '9340' },
+};
+
+// Periodo elegido. Vive a nivel de módulo, como el modo de la cascada: sobrevive a los
+// repintados y no se pierde mientras se escribe.
+let periodoElegido = 'anio';
 
 function pintarMioRes(c) {
   const { f, card } = c;
@@ -1183,7 +1194,7 @@ export function bindResidencia(handlers) {
       // Lo tecleado puede venir en meses: se guarda SIEMPRE en años, que es la unidad
       // en la que piensan los escenarios. Solo la pantalla habla de meses.
       const bruto = Number.isFinite(v) ? Math.max(0, v) : 0;
-      beneficioManual = periodoMensual ? bruto * 12 : bruto;
+      beneficioManual = bruto * ((PERIODOS[periodoElegido] || PERIODOS.anio).divisor);
       refrescar();
       // Los atajos se marcan con classList, sin reescribir HTML: así se iluminan mientras
       // se teclea en el input de al lado sin robarle el foco.
@@ -1208,8 +1219,8 @@ export function bindResidencia(handlers) {
     if (btn) {
       // El selector mes/año no cambia la cifra, solo cómo se escribe y se lee.
       const per = btn.closest('#res-periodo') ? btn.dataset.periodo : null;
-      if (per) {
-        periodoMensual = per === 'mes';
+      if (per && PERIODOS[per]) {
+        periodoElegido = per;
         repintarTodo();
         return;
       }

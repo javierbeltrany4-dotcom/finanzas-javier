@@ -1488,3 +1488,10 @@ td.col-real { font-weight: 600; }
   .res-periodo { width: 100%; }
   .res-periodo button { flex: 1; }
 }
+
+/* El puente de bruto a bolsillo: la resta que se pierde de vista al comparar
+   "mi 40 % de este mes" con "lo que quiero limpio". */
+.obj-puente {
+  margin: 12px 0 0; padding: 12px 14px;
+  background: var(--amber-dim); border-left: 2px solid var(--amber); border-radius: 8px;
+}

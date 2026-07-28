@@ -267,11 +267,26 @@ function pintarInversaRes(c) {
   }
 
   const card = c.card;
+  // Tu parte BRUTA con esas ventas. Sin esta cifra el resultado desconcierta: pedir 1.709
+  // "limpios" devuelve una facturación que parece enorme, porque entre medias hay 582 € de
+  // cuota, IRPF, asesoría y gimnasio. Enseñando el bruto se ve de dónde sale la diferencia.
+  const conEsas = resultadoMensual(modelo, r.ventasExactas);
   const tarjetas = [
     cardCon('acento', 'Ventas al mes', `<span class="num">${ventasTexto(r.ventas)}</span>`, 'con el IRPF real por tramos: esta es la respuesta'),
     card('Facturas al mes', `<span class="num">${euros(f, r.facturacionMes)}</span>`, 'lo que tiene que entrar por caja, IVA incluido'),
+    card('Tu 40 % en bruto', `<span class="num">${euros(f, conEsas.miParte)}</span>`, 'lo que te tocaría ANTES de cuota, IRPF y tus gastos'),
     card('Facturas al año', `<span class="num">${euros(f, r.facturacionAnio)}</span>`, 'lo mismo, a doce meses'),
   ].join('');
+
+  // De bruto a bolsillo, en una línea. Es la resta que él no estaba viendo.
+  const merma = conEsas.miParte - objetivo;
+  const puente = merma > 0
+    ? `<p class="mc obj-puente">Ojo con la diferencia: tu 40 % en bruto serían
+       <strong>${euros(f, conEsas.miParte)}</strong>, pero en el bolsillo te quedan
+       <strong>${euros(f, objetivo)}</strong>. Los ${euros(f, merma)} de en medio son cuota
+       de autónomo, IRPF, asesoría y gimnasio. Cuando compares con "mi 40 % de este mes",
+       acuérdate de que esa cifra es la de arriba, no la de abajo.</p>`
+    : '';
 
   // La comparativa con la retención plana: el otro número, pequeño y debajo.
   const rPlana = ventasParaLimpiar(modelo, objetivo);
@@ -294,7 +309,8 @@ function pintarInversaRes(c) {
     ? `<span class="pos">Ya lo consigues:</span> con esa media te quedan ${euros(f, bolsilloHoy)} limpios de verdad.`
     : `Para el objetivo te faltan <strong>${ventasTexto(faltan)}</strong> sobre tu media.`;
 
-  return `<div class="grid grid-3 obj-cards">${tarjetas}</div>
+  return `<div class="grid grid-4 obj-cards">${tarjetas}</div>
+    ${puente}
     ${plana}
     <p class="obj-contexto">${vivo}${estado}</p>`;
 }
