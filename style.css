@@ -332,3 +332,149 @@ tr.peor td { background: var(--red-dim) !important; }
 @media (max-width: 400px) {
   .grid-3, .grid-4 { grid-template-columns: 1fr; }
 }
+
+/* ============================================================
+   IMPUESTOS Y PATRIMONIO
+   ============================================================ */
+
+/* ---------- Avisos ---------- */
+/* Variante ámbar de .alerta: "ojo con esto" sin ser un error. */
+.aviso-ambar {
+  display: flex; align-items: flex-start; gap: 12px;
+  border: 1px solid var(--amber); background: var(--amber-dim);
+  color: var(--text); padding: 14px 18px; border-radius: 14px; margin-bottom: 18px;
+  font-size: 14px; line-height: 1.45;
+}
+.aviso-ambar svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--amber); margin-top: 1px; }
+.aviso-ambar strong { color: var(--amber); }
+.aviso-ambar .mc { display: block; margin-top: 4px; }
+.alerta.aviso-ambar { border-color: var(--amber); background: var(--amber-dim); }
+.alerta.aviso-ambar svg { color: var(--amber); }
+
+/* ---------- IRPF en la UI ---------- */
+/* Línea pequeña bajo el hero: "si lo sacas por banco…". */
+.irpf-linea {
+  font-size: 12px; color: var(--muted); line-height: 1.5;
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+  max-width: 62ch;
+}
+.irpf-linea strong { color: var(--amber); font-weight: 600; font-family: var(--fm); }
+.irpf-linea .neto { color: var(--green); font-weight: 600; font-family: var(--fm); }
+
+/* Etiqueta minúscula "estimado" (calendario, proyecciones). */
+.badge-est {
+  display: inline-block; vertical-align: middle;
+  font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 5px; margin-left: 6px;
+  background: var(--amber-dim); color: var(--amber); font-family: var(--fh);
+}
+
+/* Celda de tabla con el importe de IRPF. */
+.col-irpf, td.col-irpf, th.col-irpf { color: var(--amber); }
+th.col-irpf { color: var(--amber); opacity: .8; }
+
+/* Totales del filtro activo, entre los filtros y la tabla. */
+#retiros-totales:not(:empty) { margin-bottom: 16px; }
+
+/* ---------- Patrimonio ---------- */
+/* Cabecera de grupo: RESERVAS / OBJETIVOS. */
+.pat-grupo {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .12em; color: var(--muted);
+  margin: 18px 0 8px;
+}
+.pat-grupo:first-child { margin-top: 0; }
+
+/* Fila editable de cuenta u objetivo. Mismo aspecto que .gasto-fila,
+   pero con más columnas y envoltorio propio para la barra de progreso. */
+.pat-fila {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); padding: 10px 12px; margin-bottom: 8px;
+  transition: border-color .2s var(--ease);
+}
+.pat-fila:hover { border-color: var(--border2); }
+.pat-fila input, .pat-fila select {
+  min-width: 0; font-family: var(--fh); font-size: 14px;
+  padding: 9px 11px; border: 1px solid var(--border2); border-radius: 9px;
+  background: var(--surface2); color: var(--text);
+}
+.pat-fila input[type="text"] { flex: 1 1 150px; }
+.pat-fila input[type="number"] { flex: 0 1 110px; }
+.pat-fila select { flex: 0 1 128px; }
+/* Importes: monospace y alineados a la derecha, como el resto de números. */
+.pat-fila input[type="number"],
+.pat-fila input.imp,
+.pat-fila .pat-imp { font-family: var(--fm); font-variant-numeric: tabular-nums; text-align: right; }
+.pat-fila input.nom, .pat-fila .pat-nombre { flex: 1 1 150px; font-family: var(--fh); text-align: left; }
+/* Botón de borrar: siempre al final de la fila. */
+.pat-fila button { flex: 0 0 auto; margin-left: auto; padding: 7px 11px; font-size: 13px; }
+.pat-fila .pat-del, .pat-fila .pat-x {
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+  border-radius: 9px; cursor: pointer; font-family: inherit;
+}
+.pat-fila .pat-del:hover, .pat-fila .pat-x:hover { color: var(--red); border-color: var(--red); }
+.pat-fila .mc { flex: 1 0 100%; margin: 0; }
+
+/* Barra de progreso fina por objetivo. Ocupa el ancho completo de la fila. */
+.pat-barra {
+  flex: 1 0 100%;
+  height: 5px; border-radius: 999px; background: var(--surface2);
+  overflow: hidden; margin-top: 2px;
+}
+.pat-barra-fill {
+  display: block; height: 100%; border-radius: 999px; width: 0;
+  background: var(--amber);
+  transition: width .8s var(--ease), background .3s var(--ease);
+}
+.pat-barra-fill.completo { background: var(--green); }
+.pat-barra-fill.medias { background: var(--amber); }
+
+/* Bloque destacado del dinero libre. */
+.pat-libre {
+  border: 1px solid var(--green); background: var(--green-dim);
+  border-radius: 16px; padding: 20px 22px; margin-bottom: 18px;
+}
+.pat-libre .l {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--muted); margin-bottom: 8px;
+}
+.pat-libre .v {
+  font-family: var(--fm); font-variant-numeric: tabular-nums;
+  font-size: clamp(26px, 5vw, 34px); letter-spacing: -.02em; line-height: 1.1;
+  color: var(--green);
+}
+.pat-libre .mc { display: block; margin-top: 8px; }
+.pat-libre.negativo { border-color: var(--red); background: var(--red-dim); }
+.pat-libre.negativo .v { color: var(--red); }
+
+/* ---------- Móvil: prioritario (PWA en iPhone) ---------- */
+@media (max-width: 640px) {
+  .pat-fila {
+    flex-direction: column; align-items: stretch; gap: 6px;
+    padding: 12px; border-radius: 11px;
+  }
+  .pat-fila input,
+  .pat-fila select,
+  .pat-fila input[type="text"],
+  .pat-fila input[type="number"] {
+    flex: 1 1 auto; width: 100%; font-size: 16px; /* 16px evita el zoom de iOS */
+  }
+  .pat-fila button { width: 100%; margin-left: 0; }
+  .pat-barra { flex: 1 1 auto; width: 100%; }
+  .pat-libre { padding: 16px 18px; }
+  .aviso-ambar { padding: 12px 14px; font-size: 13px; }
+  .irpf-linea { font-size: 11.5px; }
+  #pat-avisos, #pat-cuentas, #pat-objetivos, #pat-totales, #retiros-totales { max-width: 100%; }
+  #pat-cuentas, #pat-objetivos { overflow-x: hidden; }
+  #pat-add-cuenta, #pat-add-objetivo { width: 100%; }
+  .badge-est { font-size: 8px; padding: 1px 5px; }
+  /* Filtros de retiros: sin scroll horizontal, se reparten en varias líneas. */
+  #v-retiros .filtros { gap: 8px; }
+  #v-retiros .filtros select,
+  #v-retiros .filtros input[type="date"] {
+    flex: 1 1 120px; min-width: 0; max-width: 100%; font-size: 16px;
+  }
+  #v-retiros .filtros .mc { flex: 0 0 auto; }
+  #v-retiros .filtros #filtro-limpiar { flex: 1 1 100%; }
+}

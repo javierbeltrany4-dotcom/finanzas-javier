@@ -36,6 +36,7 @@
       <button class="tab" data-vista="retiros">Retiros</button>
       <button class="tab" data-vista="midinero">Mi dinero</button>
       <button class="tab" data-vista="calendario">Calendario</button>
+      <button class="tab" data-vista="patrimonio">Mi patrimonio</button>
     </div>
   </nav>
 
@@ -109,7 +110,17 @@
             <option value="yo">Mi parte (40%)</option>
             <option value="david">Parte de David (60%)</option>
           </select>
+          <span class="mc">Año:</span>
+          <select id="filtro-anio"></select>
+          <span class="mc">Mes:</span>
+          <select id="filtro-mes"></select>
+          <span class="mc">Desde:</span>
+          <input type="date" id="filtro-desde" />
+          <span class="mc">Hasta:</span>
+          <input type="date" id="filtro-hasta" />
+          <button class="btn btn-ghost" id="filtro-limpiar">Limpiar</button>
         </div>
+        <div class="grid grid-4" id="retiros-totales"></div>
         <div class="tabla-wrap" id="tabla-retiros"></div>
       </div>
     </section>
@@ -161,6 +172,25 @@
         <div class="cal-grid" id="cal-grid"></div>
       </div>
     </section>
+
+    <!-- MI PATRIMONIO -->
+    <section class="vista" id="v-patrimonio">
+      <div id="pat-avisos"></div>
+      <div class="bloque">
+        <div class="bloque-title">Mis cuentas</div>
+        <div id="pat-cuentas"></div>
+        <button class="btn btn-ghost" id="pat-add-cuenta">+ Añadir cuenta</button>
+      </div>
+      <div class="bloque">
+        <div class="bloque-title">Reservado para</div>
+        <div id="pat-objetivos"></div>
+        <button class="btn btn-ghost" id="pat-add-objetivo">+ Añadir objetivo</button>
+      </div>
+      <div class="bloque">
+        <div class="bloque-title">Resumen</div>
+        <div class="grid grid-4" id="pat-totales"></div>
+      </div>
+    </section>
   </main>
 
   <!-- Modal editar datos -->
@@ -175,6 +205,15 @@
 
       <label>Objetivo de beneficio mensual (€) · 0 = sin objetivo</label>
       <input type="number" step="0.01" id="g-meta" />
+
+      <label>IRPF (%)</label>
+      <input type="number" step="0.1" id="g-irpf" />
+
+      <label>Conceptos que tributan (separados por coma)</label>
+      <input type="text" id="g-banco" />
+
+      <label>Conceptos que NO tributan (cripto)</label>
+      <input type="text" id="g-cripto" />
 
       <label>Mis gastos fijos mensuales</label>
       <div id="g-gastos"></div>

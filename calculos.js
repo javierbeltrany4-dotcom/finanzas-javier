@@ -212,3 +212,136 @@ export function formatoEuros(n) {
   const entFmt = ent.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   return `${neg ? '-' : ''}${entFmt},${dec} €`;
 }
+
+// ---------------------------------------------------------------------------
+// Capa de IRPF y filtros de retiros
+// ---------------------------------------------------------------------------
+
+// Configuración por defecto: 20% y las listas de conceptos que decidió el usuario.
+export const IRPF_DEFAULT = {
+  porcentaje: 20,
+  conceptosBanco: ['Fyrst'],
+  conceptosCripto: ['Binance', 'Bitbase'],
+};
+
+// Normaliza una lista de conceptos de la config: sin vacíos, en minúsculas y sin espacios sobrantes.
+function conceptosNormalizados(lista) {
+  return (lista || [])
+    .map((c) => String(c ?? '').trim().toLowerCase())
+    .filter(Boolean);
+}
+
+// 'banco' | 'cripto' | 'desconocido'. Case-insensitive, por substring en retiro.concepto.
+// Banco gana si coincide en ambas listas. Sin concepto -> 'desconocido'.
+export function clasificarRetiro(retiro, cfg = IRPF_DEFAULT) {
+  const concepto = String(retiro?.concepto ?? '').trim().toLowerCase();
+  if (!concepto) return 'desconocido';
+  const contiene = (lista) => conceptosNormalizados(lista).some((c) => concepto.includes(c));
+  if (contiene(cfg?.conceptosBanco)) return 'banco';
+  if (contiene(cfg?.conceptosCripto)) return 'cripto';
+  return 'desconocido';
+}
+
+// true (banco) | false (cripto) | null (desconocido). Nunca se adivina.
+export function tributaRetiro(retiro, cfg = IRPF_DEFAULT) {
+  const clase = clasificarRetiro(retiro, cfg);
+  if (clase === 'banco') return true;
+  if (clase === 'cripto') return false;
+  return null;
+}
+
+// IRPF sobre MI parte. Solo si clasificarRetiro === 'banco'. Cripto y desconocido -> 0.
+export function irpfDeRetiro(retiro, cfg = IRPF_DEFAULT, split = SPLIT) {
+  if (clasificarRetiro(retiro, cfg) !== 'banco') return 0;
+  const pct = Number(cfg?.porcentaje) || 0;
+  return (retiro?.total || 0) * split.yo * (pct / 100);
+}
+
+// Mi parte del retiro menos su IRPF.
+export function miNetoDeRetiro(retiro, cfg = IRPF_DEFAULT, split = SPLIT) {
+  return (retiro?.total || 0) * split.yo - irpfDeRetiro(retiro, cfg, split);
+}
+
+// Conceptos únicos sin clasificar, para avisar. -> string[]
+// Los retiros sin concepto no aportan texto que listar y se omiten.
+export function conceptosDesconocidos(retiros, cfg = IRPF_DEFAULT) {
+  const vistos = [];
+  for (const r of retiros || []) {
+    if (clasificarRetiro(r, cfg) !== 'desconocido') continue;
+    const concepto = String(r?.concepto ?? '').trim();
+    if (!concepto) continue;
+    if (!vistos.includes(concepto)) vistos.push(concepto);
+  }
+  return vistos;
+}
+
+// Agregado de una lista ya filtrada.
+// -> { n, bruto, miBruto, irpf, miNeto, desconocidos: string[] }
+export function resumenRetiros(retiros, cfg = IRPF_DEFAULT, split = SPLIT) {
+  const lista = retiros || [];
+  let bruto = 0;
+  let irpf = 0;
+  for (const r of lista) {
+    bruto += r?.total || 0;
+    irpf += irpfDeRetiro(r, cfg, split);
+  }
+  const miBruto = bruto * split.yo;
+  return {
+    n: lista.length,
+    bruto,
+    miBruto,
+    irpf,
+    miNeto: miBruto - irpf,
+    desconocidos: conceptosDesconocidos(lista, cfg),
+  };
+}
+
+// IRPF acumulado de todos los retiros hasta `hasta` (inclusive). 'hasta' opcional.
+export function irpfAcumulado(retiros, hasta, cfg = IRPF_DEFAULT, split = SPLIT) {
+  return (retiros || [])
+    .filter((r) => !hasta || r.fecha <= hasta)
+    .reduce((acc, r) => acc + irpfDeRetiro(r, cfg, split), 0);
+}
+
+// Filtros. Todos los campos opcionales; se combinan con AND.
+// { desde, hasta } = 'YYYY-MM-DD' inclusive. { anio } = '2026'. { mes } = '2026-07'.
+export function filtrarRetiros(retiros, filtro = {}) {
+  const { desde, hasta, anio, mes } = filtro || {};
+  return (retiros || []).filter((r) => {
+    const fecha = r?.fecha || '';
+    if (desde && fecha < desde) return false;
+    if (hasta && fecha > hasta) return false;
+    if (anio && fecha.slice(0, 4) !== anio) return false;
+    if (mes && fecha.slice(0, 7) !== mes) return false;
+    return true;
+  });
+}
+
+// Años únicos con retiros, ordenados de más nuevo a más viejo. -> ['2026', '2025']
+export function aniosDeRetiros(retiros) {
+  const anios = new Set();
+  for (const r of retiros || []) {
+    const a = (r?.fecha || '').slice(0, 4);
+    if (a) anios.add(a);
+  }
+  return [...anios].sort().reverse();
+}
+
+// Meses únicos con retiros, ordenados desc. `anio` opcional para acotar. -> ['2026-07', '2026-05']
+export function mesesDeRetiros(retiros, anio) {
+  const meses = new Set();
+  for (const r of filtrarRetiros(retiros, anio ? { anio } : {})) {
+    const m = (r?.fecha || '').slice(0, 7);
+    if (m) meses.add(m);
+  }
+  return [...meses].sort().reverse();
+}
+
+// Ahorro real de un mes: mi parte de los retiros, menos su IRPF, menos los gastos fijos.
+// -> { miBruto, irpf, gastos, ahorro }  donde ahorro = miBruto - irpf - gastos
+export function ahorroRealDelMes(retiros, mes, gastosFijosTotal, cfg = IRPF_DEFAULT, split = SPLIT) {
+  const delMes = filtrarRetiros(retiros, { mes });
+  const { miBruto, irpf } = resumenRetiros(delMes, cfg, split);
+  const gastos = Number(gastosFijosTotal) || 0;
+  return { miBruto, irpf, gastos, ahorro: miBruto - irpf - gastos };
+}

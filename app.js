@@ -1,10 +1,14 @@
 import * as C from './calculos.js';
+import * as P from './patrimonio.js';
+import { renderPatrimonio, bindPatrimonio } from './vista-patrimonio.js';
 import { parseTradinverso, cargarTradinverso } from './tradinverso.js';
 
 const CACHE_KEY = 'tv-cache-v2';
 const SALDO_KEY = 'saldo-banco-v2';
 const GASTOS_KEY = 'gastos-fijos-v2';
 const META_KEY = 'meta-mensual-v1';
+const PATRIMONIO_KEY = 'patrimonio-v1';
+const IRPF_KEY = 'irpf-v1';
 
 let config = null;
 let datos = { ingresos: [], retiros: [], ventas: [], gastosNegocio: [], caja: {} };
@@ -37,6 +41,13 @@ const card = (l, v, mc = '') => `<div class="card"><div class="l">${l}</div><div
 const nc = (n, cls = '') => `<span class="num ${cls}" data-count="${n}">${f(0)}</span>`;
 
 const reduceMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Texto que no controlamos (conceptos de Tradingverso, nombres del usuario) antes de meterlo en innerHTML.
+function esc(v) {
+  return String(v === null || v === undefined ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 
 function animarCountUps(scope) {
   scope.querySelectorAll('[data-count]').forEach((el) => {
@@ -76,6 +87,11 @@ function sparkline(values, color = '#00c896') {
 function getGastos() { const o = localStorage.getItem(GASTOS_KEY); return o ? JSON.parse(o) : config.config.gastosFijos; }
 function getSaldo() { const o = localStorage.getItem(SALDO_KEY); return o ? JSON.parse(o) : config.saldoBanco; }
 function getMeta() { const o = localStorage.getItem(META_KEY); return o !== null ? parseFloat(o) : (config.config.metaMensual || 0); }
+// Patrimonio: lo escribe el usuario, vive en localStorage. datos.json es solo la semilla.
+function getPatrimonio() { const o = localStorage.getItem(PATRIMONIO_KEY); return o ? JSON.parse(o) : (config.patrimonio || P.PATRIMONIO_VACIO); }
+function setPatrimonio(p) { localStorage.setItem(PATRIMONIO_KEY, JSON.stringify(p)); }
+// Config de IRPF: porcentaje y listas de conceptos. Editable desde el modal.
+function getIrpf() { const o = localStorage.getItem(IRPF_KEY); return o ? JSON.parse(o) : (config.config.irpf || C.IRPF_DEFAULT); }
 const split = () => config.config.split;
 const finDeMes = (ym) => `${ym}-${String(new Date(+ym.slice(0, 4), +ym.slice(5, 7), 0).getDate()).padStart(2, '0')}`;
 
@@ -155,7 +171,35 @@ function renderVerificacion() {
   const checks = r.checks.map((c) =>
     `<div class="vcheck ${c.ok ? 'ok' : 'bad'}">${c.ok ? CK : CX}<span>${c.nombre}${c.detalle ? ` — <em>${c.detalle}</em>` : ''}</span></div>`
   ).join('');
-  cont.innerHTML = stale + badge + `<div class="vchecks">${checks}</div>`;
+  // Conceptos de retiro que no encajan en ninguna lista: no se adivina si tributan,
+  // cuentan 0 € de IRPF y se avisa para que el usuario los clasifique a mano.
+  const desconocidos = C.conceptosDesconocidos(datos.retiros || [], getIrpf());
+  let ambar = '';
+  if (desconocidos.length) {
+    const plural = desconocidos.length > 1;
+    ambar = `<div class="aviso-ambar">${ICON_WARN}<span><strong>${desconocidos.length} concepto${plural ? 's' : ''} de retiro sin clasificar:</strong> ${desconocidos.map(esc).join(', ')}.
+      No sé si tributan, así que cuenta${plural ? 'n' : ''} <strong>0 €</strong> de IRPF y el neto real puede estar inflado.
+      <span class="mc">Clasifícalo${plural ? 's' : ''} en <strong>Editar datos</strong>: conceptos que tributan (banco) o que no tributan (cripto).</span></span></div>`;
+  }
+  cont.innerHTML = stale + badge + ambar + `<div class="vchecks">${checks}</div>`;
+}
+
+// Línea bajo el hero: qué se llevaría de verdad si sacara ese dinero por transferencia.
+// Solo tributa la vía bancaria, así que con el IRPF al 0% no hay nada que contar y no se pinta.
+function pintarLineaIrpf(disponible) {
+  const hero = document.querySelector('#v-resumen .hero');
+  if (!hero) return;
+  let linea = document.getElementById('hero-irpf');
+  const pct = Number(getIrpf().porcentaje) || 0;
+  if (pct <= 0) { if (linea) linea.remove(); return; }
+  if (!linea) {
+    linea = document.createElement('div');
+    linea.id = 'hero-irpf';
+    linea.className = 'irpf-linea';
+    hero.appendChild(linea);
+  }
+  const impuesto = disponible * (pct / 100);
+  linea.innerHTML = `Si lo sacas por transferencia bancaria, IRPF <strong>−${f(impuesto)}</strong> (${pct}%): te quedarían <span class="neto">${f(disponible - impuesto)}</span>. Por cripto no tributa aquí.`;
 }
 
 function renderResumen() {
@@ -170,6 +214,7 @@ function renderResumen() {
   setNum('hero-cobro', caja.pendienteCobro || 0);
   setNum('hero-david', C.disponibleParaDavid(ingresos, retiros, sp));
   document.getElementById('hero-spark').innerHTML = sparkline(ingresos.map((i) => C.miParteMes(i.beneficio, sp)));
+  pintarLineaIrpf(C.disponibleRealParaMi(caja, sp));
 
   const ym = mesActual();
   const idx = ingresos.findIndex((i) => i.mes === ym);
@@ -275,6 +320,18 @@ function chartOpts() {
 }
 
 // ---------- RETIROS ----------
+// Rellena un <select> de filtro conservando lo elegido si sigue existiendo.
+// Devuelve el valor efectivo ('' = Todos) para no leerlo dos veces.
+function rellenarFiltro(id, valores, texto = (v) => v) {
+  const el = document.getElementById(id);
+  if (!el) return '';
+  const previo = el.value;
+  el.innerHTML = '<option value="">Todos</option>'
+    + valores.map((v) => `<option value="${v}">${texto(v)}</option>`).join('');
+  el.value = valores.includes(previo) ? previo : '';
+  return el.value;
+}
+
 function renderRetiros() {
   const { ingresos, retiros, caja } = datos;
   const sp = split();
@@ -297,20 +354,54 @@ function renderRetiros() {
     card('Reinvertido / en caja', `<span class="num">${f(C.beneficioAcumulado(ingresos) - C.totalRetirado(retiros))}</span>`, 'beneficio que no se ha sacado'),
   ].join('');
 
+  // Filtros de fecha. El año manda sobre la lista de meses: si cambia, los meses se repueblan.
+  const irpfCfg = getIrpf();
+  const anio = rellenarFiltro('filtro-anio', C.aniosDeRetiros(retiros));
+  const mes = rellenarFiltro('filtro-mes', C.mesesDeRetiros(retiros, anio || undefined), nombreMes);
+  const desde = document.getElementById('filtro-desde').value;
+  const hasta = document.getElementById('filtro-hasta').value;
+  const lista = C.filtrarRetiros(retiros, { anio, mes, desde, hasta });
+
+  // Cabecera del conjunto filtrado: cuánto se movió y cuánto queda de verdad.
+  const res = C.resumenRetiros(lista, irpfCfg, sp);
+  document.getElementById('retiros-totales').innerHTML = [
+    card(`${res.n} retiro${res.n === 1 ? '' : 's'}`, `<span class="num">${f(res.bruto)}</span>`, 'bruto del negocio (100%)'),
+    card('Mi 40%', `<span class="num pos">${f(res.miBruto)}</span>`, 'mi parte, antes de impuestos'),
+    card('IRPF', `<span class="num col-irpf">${f(res.irpf)}</span>`, 'solo de los retiros por banco'),
+    card('Neto real', `<span class="num ${res.miNeto >= 0 ? 'pos' : 'neg'}">${f(res.miNeto)}</span>`, 'lo que me queda tras Hacienda'),
+  ].join('');
+
   const filtro = document.getElementById('filtro-retiros').value;
   let filas = '';
-  retiros.forEach((r) => {
+  lista.forEach((r) => {
     const yo = r.total * sp.yo, david = r.total * sp.david;
     const caja2 = C.cajaRestanteTrasRetiro(ingresos, retiros, r.fecha);
     let imp, rep;
     if (filtro === 'yo') { imp = yo; rep = 'Yo (40%)'; }
     else if (filtro === 'david') { imp = david; rep = 'David (60%)'; }
     else { imp = r.total; rep = `Yo ${f(yo)} · David ${f(david)}`; }
-    filas += `<tr><td>${r.fecha}</td><td class="num">${f(imp)}</td><td>${rep}</td><td class="num">${f(caja2)}</td></tr>`;
+    // Cripto no tributa: va un guion, no un 0,00 € (que se leería como "ya calculado").
+    // Desconocido: no se adivina, se marca con "?" en ámbar hasta que se clasifique.
+    const clase = C.clasificarRetiro(r, irpfCfg);
+    let tdIrpf, tdNeto;
+    if (clase === 'banco') {
+      tdIrpf = `<td class="num col-irpf">−${f(C.irpfDeRetiro(r, irpfCfg, sp))}</td>`;
+      tdNeto = `<td class="num pos">${f(C.miNetoDeRetiro(r, irpfCfg, sp))}</td>`;
+    } else if (clase === 'cripto') {
+      tdIrpf = '<td class="num" style="color:var(--dim)" title="Cripto: no tributa aquí">—</td>';
+      tdNeto = `<td class="num">${f(yo)}</td>`;
+    } else {
+      tdIrpf = '<td class="num" style="color:var(--amber)" title="Concepto sin clasificar">?</td>';
+      tdNeto = '<td class="num" style="color:var(--amber)" title="Sin saber si tributa, no se puede calcular">?</td>';
+    }
+    filas += `<tr><td>${r.fecha}</td><td class="num">${f(imp)}</td><td>${rep}</td>${tdIrpf}${tdNeto}<td class="num">${f(caja2)}</td></tr>`;
   });
-  if (!filas) filas = '<tr><td colspan="4" class="vacio">Sin retiros todavía.</td></tr>';
+  if (!filas) filas = '<tr><td colspan="6" class="vacio">Sin retiros con estos filtros.</td></tr>';
+  const listaBanco = (irpfCfg.conceptosBanco || []).join(', ') || '—';
+  const listaCripto = (irpfCfg.conceptosCripto || []).join(', ') || '—';
   document.getElementById('tabla-retiros').innerHTML =
-    `<table><thead><tr><th>Fecha</th><th class="num">Importe</th><th>Reparto</th><th class="num">Caja restante (contable)</th></tr></thead><tbody>${filas}</tbody></table>`;
+    `<table><thead><tr><th>Fecha</th><th class="num">Importe</th><th>Reparto</th><th class="num col-irpf">IRPF</th><th class="num">Neto real (mío)</th><th class="num">Caja restante (contable)</th></tr></thead><tbody>${filas}</tbody></table>
+     <p class="mc" style="padding:12px 18px 2px">El <strong>IRPF</strong> (${Number(irpfCfg.porcentaje) || 0}%) se calcula sobre mi 40% y solo en los retiros por transferencia (${esc(listaBanco)}). Los de cripto (${esc(listaCripto)}) llevan "—" porque no tributan aquí. Un "?" es un concepto sin clasificar: revísalo en "Editar datos".</p>`;
 }
 
 // ---------- MI DINERO ----------
@@ -324,23 +415,36 @@ function renderMiDinero() {
   const miParte = C.miParteMes(benef, sp);
   const miRetiro = C.miRetiroDelMes(retiros, ym, sp);
   const gastos = C.gastoFijoMensual(getGastos());
-  const ahorro = C.ahorroDelMes(miRetiro, gastos);
+  const irpfCfg = getIrpf();
+  const pctIrpf = Number(irpfCfg.porcentaje) || 0;
+  // Ahorro real = mi 40% retirado − su IRPF − gastos fijos. El IRPF ya no es invisible.
+  const ar = C.ahorroRealDelMes(retiros, ym, gastos, irpfCfg, sp);
+  const ahorro = ar.ahorro;
   const huboRetiro = C.retirosDelMes(retiros, ym) > 0;
 
   document.getElementById('midinero-cards').innerHTML = [
     card('Mi beneficio generado (40%)', `<span class="num pos">${f(miParte)}</span>`, 'lo que me corresponde aunque no lo saque'),
     card('Retirado por mí este mes', `<span class="num">${f(miRetiro)}</span>`, huboRetiro ? 'dinero que entró a mi bolsillo' : 'este mes no retiré nada'),
+    card('IRPF del mes', `<span class="num" style="color:var(--amber)">${f(ar.irpf)}</span>`, `${pctIrpf}% de lo retirado por transferencia`),
     card('Mis gastos fijos', `<span class="num neg">${f(gastos)}</span>`, 'gym, asesoría, autónomo…'),
-    card(huboRetiro ? 'Ahorro del mes' : 'Sale de mi banco', `<span class="num ${ahorro >= 0 ? 'pos' : 'neg'}">${f(ahorro)}</span>`, huboRetiro ? 'lo retirado menos mis gastos' : 'gastos cubiertos con tu cuenta'),
+    card(huboRetiro ? 'Ahorro real del mes' : 'Sale de mi banco', `<span class="num ${ahorro >= 0 ? 'pos' : 'neg'}">${f(ahorro)}</span>`, huboRetiro ? 'retirado − IRPF − gastos fijos' : 'gastos cubiertos con tu cuenta'),
   ].join('');
+
+  // Desglose completo, línea a línea: de lo retirado al ahorro real, sin pasos ocultos.
+  const desglose = [
+    ['Retirado (mi 40%)', f(ar.miBruto)],
+    [`− IRPF (${pctIrpf}%)`, `−${f(ar.irpf)}`],
+    ['− Gastos fijos', `−${f(ar.gastos)}`],
+    ['= Ahorro real', f(ar.ahorro)],
+  ].map(([l, v]) => `<div>${l}: <strong>${v}</strong></div>`).join('');
 
   let aviso = '';
   if (!huboRetiro) {
-    aviso = `<div class="alerta">${ICON_WARN}<span>Este mes <strong>no retiraste nada</strong> (reinversión en el negocio). Tus gastos fijos (${f(gastos)}) salen de tu cuenta bancaria, no del negocio. Tu beneficio generado (${f(miParte)}) sigue en la caja.</span></div>`;
+    aviso = `<div class="alerta">${ICON_WARN}<span>Este mes <strong>no retiraste nada</strong> (reinversión en el negocio). Tus gastos fijos (${f(gastos)}) salen de tu cuenta bancaria, no del negocio. Tu beneficio generado (${f(miParte)}) sigue en la caja y todavía no tributa: el IRPF llega cuando lo saques por transferencia.</span></div>`;
   } else if (ahorro >= 0) {
-    aviso = `<div class="alerta ok">${ICON_OK}<span>Este mes retiraste ${f(miRetiro)} y tras tus gastos fijos te quedan <strong>${f(ahorro)}</strong> de ahorro.</span></div>`;
+    aviso = `<div class="alerta ok">${ICON_OK}<span>Este mes retiraste ${f(ar.miBruto)}; tras Hacienda y tus gastos fijos te quedan <strong>${f(ahorro)}</strong> de ahorro real.<span class="mc">${desglose}</span></span></div>`;
   } else {
-    aviso = `<div class="alerta">${ICON_WARN}<span>Lo retirado (${f(miRetiro)}) no cubre tus gastos fijos (${f(gastos)}). Te faltan <strong>${f(Math.abs(ahorro))}</strong> de tu cuenta.</span></div>`;
+    aviso = `<div class="alerta">${ICON_WARN}<span>Lo retirado tras IRPF (${f(ar.miBruto - ar.irpf)}) no cubre tus gastos fijos (${f(gastos)}). Te faltan <strong>${f(Math.abs(ahorro))}</strong> de tu cuenta.<span class="mc">${desglose}</span></span></div>`;
   }
   document.getElementById('aviso-midinero').innerHTML = aviso;
 
@@ -364,29 +468,34 @@ function renderMiDinero() {
   // Acumulados + histórico personal
   const miBeneficioTotal = C.miParteDe(C.beneficioAcumulado(ingresos), sp);
   const miRetiradoTotal = C.retiradoPorMi(retiros, sp);
+  // El acumulado descuenta también el IRPF de cada mes: es dinero que nunca fue mío.
   let ahorroAcum = 0;
   ingresos.forEach((i) => {
-    const ret = C.miRetiroDelMes(retiros, i.mes, sp);
-    if (ret > 0) ahorroAcum += C.ahorroDelMes(ret, gastos);
+    const a = C.ahorroRealDelMes(retiros, i.mes, gastos, irpfCfg, sp);
+    if (a.miBruto > 0) ahorroAcum += a.ahorro;
   });
   const sparkBenef = `<div class="spark">${sparkline(ingresos.map((i) => C.miParteMes(i.beneficio, sp)))}</div>`;
   document.getElementById('midinero-acum').innerHTML = [
     card('Mi beneficio generado total', nc(miBeneficioTotal, 'pos') + sparkBenef, '40% de todo lo generado'),
     card('Me he retirado en total', nc(miRetiradoTotal), 'dinero que ya me llevé'),
-    card('Ahorro acumulado', nc(ahorroAcum, ahorroAcum >= 0 ? 'pos' : 'neg'), 'retiros menos gastos, meses con retiro'),
+    card('Ahorro acumulado', nc(ahorroAcum, ahorroAcum >= 0 ? 'pos' : 'neg'), 'retiros − IRPF − gastos, meses con retiro'),
   ].join('');
 
   let filas = '';
   ingresos.forEach((i) => {
     const miBen = C.miParteMes(i.beneficio, sp);
-    const ret = C.miRetiroDelMes(retiros, i.mes, sp);
-    const ah = ret > 0 ? C.ahorroDelMes(ret, gastos) : null;
-    filas += `<tr><td>${nombreMes(i.mes)}</td><td class="num pos">${f(miBen)}</td><td class="num">${ret > 0 ? f(ret) : '<span style="color:var(--dim)">—</span>'}</td><td class="num neg">${f(gastos)}</td><td class="num ${ah === null ? '' : ah >= 0 ? 'pos' : 'neg'}">${ah === null ? '<span style="color:var(--dim)">sin retiro</span>' : f(ah)}</td></tr>`;
+    const a = C.ahorroRealDelMes(retiros, i.mes, gastos, irpfCfg, sp);
+    const ret = a.miBruto;
+    const ah = ret > 0 ? a.ahorro : null;
+    const tdIrpf = ret > 0
+      ? `<td class="num col-irpf">${a.irpf > 0 ? '−' + f(a.irpf) : '<span style="color:var(--dim)">—</span>'}</td>`
+      : '<td class="num"><span style="color:var(--dim)">—</span></td>';
+    filas += `<tr><td>${nombreMes(i.mes)}</td><td class="num pos">${f(miBen)}</td><td class="num">${ret > 0 ? f(ret) : '<span style="color:var(--dim)">—</span>'}</td>${tdIrpf}<td class="num neg">${f(gastos)}</td><td class="num ${ah === null ? '' : ah >= 0 ? 'pos' : 'neg'}">${ah === null ? '<span style="color:var(--dim)">sin retiro</span>' : f(ah)}</td></tr>`;
   });
-  if (!filas) filas = '<tr><td colspan="5" class="vacio">Sin datos todavía.</td></tr>';
+  if (!filas) filas = '<tr><td colspan="6" class="vacio">Sin datos todavía.</td></tr>';
   document.getElementById('midinero-tabla').innerHTML =
-    `<table><thead><tr><th>Mes</th><th class="num">Mi beneficio (40%)</th><th class="num">Mi retiro</th><th class="num">Gastos fijos</th><th class="num">Ahorro</th></tr></thead><tbody>${filas}</tbody></table>
-     <p class="mc" style="padding:12px 18px 2px">El <strong>ahorro</strong> = lo que retiraste ese mes − tus gastos fijos: el dinero que te llevaste a casa. No depende del beneficio del negocio de ese mes (puedes retirar de meses anteriores). Por eso mayo, aun siendo mal mes para el negocio, tiene ahorro alto: hiciste un reparto grande.</p>`;
+    `<table><thead><tr><th>Mes</th><th class="num">Mi beneficio (40%)</th><th class="num">Mi retiro</th><th class="num col-irpf">IRPF</th><th class="num">Gastos fijos</th><th class="num">Ahorro real</th></tr></thead><tbody>${filas}</tbody></table>
+     <p class="mc" style="padding:12px 18px 2px">El <strong>ahorro real</strong> = lo que retiraste ese mes − el <strong>IRPF</strong> de esos retiros − tus gastos fijos: el dinero que de verdad te llevaste a casa. Solo tributan los retiros por transferencia; los de cripto llevan "—" en la columna de IRPF. No depende del beneficio del negocio de ese mes (puedes retirar de meses anteriores). Por eso mayo, aun siendo mal mes para el negocio, tiene ahorro alto: hiciste un reparto grande.</p>`;
 }
 
 // ---------- CALENDARIO ----------
@@ -397,9 +506,20 @@ function eventosDeFecha(iso) {
   if (gan > 0) evs.push({ tipo: 'ganancia', txt: `+${f(gan)}` });
   const gasto = C.gastosEntre(datos.gastosNegocio, iso, iso);
   if (gasto > 0) evs.push({ tipo: 'gasto', txt: `−${f(C.miParteDe(gasto, sp))}` }); // mi 40% del gasto
+  const cfg = getIrpf();
   datos.retiros.filter((r) => r.fecha === iso).forEach((r) => {
     evs.push({ tipo: 'retiro', txt: `Retiro ${f(r.total)}` });
     evs.push({ tipo: 'mio', txt: `mi 40%: ${f(C.miParteDe(r.total, sp))}` });
+    // El retiro ya se cobró: aquí el IRPF es real, no una estimación.
+    const clase = C.clasificarRetiro(r, cfg);
+    if (clase === 'banco') {
+      evs.push({ tipo: 'gasto', txt: `IRPF −${f(C.irpfDeRetiro(r, cfg, sp))}` });
+      evs.push({ tipo: 'mio', txt: `neto: ${f(C.miNetoDeRetiro(r, cfg, sp))}` });
+    } else if (clase === 'cripto') {
+      evs.push({ tipo: 'mio', txt: 'sin IRPF (cripto)' });
+    } else {
+      evs.push({ tipo: 'gasto', txt: 'sin clasificar' }); // .ev.gasto va en ámbar
+    }
   });
   return evs;
 }
@@ -528,12 +648,23 @@ function abrirDetalleDia(iso) {
   const [a, m, d] = iso.split('-');
   const fechaTxt = `${Number(d)} de ${MESES_LARGO[Number(m) - 1]} ${a}`;
 
+  // Por qué "estimado": el beneficio de este día sigue en la caja del negocio, todavía
+  // NO se ha retirado, así que todavía NO tributa. Aquí no hay un retiro que gravar:
+  // solo aplicamos el tipo general para dar una idea de lo que quedaría el día que lo
+  // saque por transferencia. Si lo sacara por cripto, el IRPF de esta línea sería 0.
+  // Por eso no se usa irpfDeRetiro (que exige un retiro real y su concepto).
+  const cfg = getIrpf();
+  const pctIrpf = Number(cfg.porcentaje) || 0;
+  const netoDiaMio = miGan - miGasto;
+  const trasIrpf = netoDiaMio * (1 - pctIrpf / 100);
+
   let html = `<div class="dia-detalle"><h3>${fechaTxt}</h3>
     <div class="dia-resumen">
       <div><span class="l">Mi ganancia (40%)</span><span class="v pos">${f(miGan)}</span></div>
       <div><span class="l">Mi parte de gastos</span><span class="v neg">${f(miGasto)}</span></div>
-      <div><span class="l">Mi neto del día</span><span class="v ${miGan - miGasto >= 0 ? 'pos' : 'neg'}">${f(miGan - miGasto)}</span></div>
+      <div><span class="l">Mi neto del día</span><span class="v ${netoDiaMio >= 0 ? 'pos' : 'neg'}">${f(netoDiaMio)}</span></div>
       <div><span class="l">Retiros del día</span><span class="v">${f(retDia)}</span></div>
+      <div><span class="l">Tras IRPF (${pctIrpf}%)<span class="badge-est">estimado</span></span><span class="v ${trasIrpf >= 0 ? 'pos' : 'neg'}">${f(trasIrpf)}</span></div>
     </div>`;
 
   if (ventas.length) {
@@ -550,14 +681,28 @@ function abrirDetalleDia(iso) {
   }
   if (retiros.length) {
     html += `<div class="dia-seccion"><h4>Retiros (${retiros.length})</h4>` +
-      retiros.map((r) =>
-        `<div class="dia-linea"><span class="cpt">${r.concepto || 'Retiro'}<small>yo 40% · David 60%</small></span><span class="imp">${f(r.total)}</span><span class="mio">${f(C.miParteDe(r.total, sp))}</span></div>`
-      ).join('') + '</div>';
+      retiros.map((r) => {
+        // Aquí sí hay retiro: el IRPF es el real de ese movimiento, no una estimación.
+        const clase = C.clasificarRetiro(r, cfg);
+        const miParteRet = C.miParteDe(r.total, sp);
+        let sub, mio;
+        if (clase === 'banco') {
+          sub = `yo 40% · IRPF −${f(C.irpfDeRetiro(r, cfg, sp))}`;
+          mio = `<span class="mio pos">${f(C.miNetoDeRetiro(r, cfg, sp))}</span>`;
+        } else if (clase === 'cripto') {
+          sub = 'yo 40% · sin IRPF (cripto)';
+          mio = `<span class="mio">${f(miParteRet)}</span>`;
+        } else {
+          sub = 'yo 40% · sin clasificar';
+          mio = `<span class="mio" style="color:var(--amber)">${f(miParteRet)} ?</span>`;
+        }
+        return `<div class="dia-linea"><span class="cpt">${esc(r.concepto || 'Retiro')}<small>${sub}</small></span><span class="imp">${f(r.total)}</span>${mio}</div>`;
+      }).join('') + '</div>';
   }
   if (!ventas.length && !gastos.length && !retiros.length) {
     html += '<p class="mc">Sin movimientos este día.</p>';
   }
-  html += '<p class="nota">Columna derecha = tu parte (40%).</p></div>';
+  html += `<p class="nota">Columna derecha = tu parte (40%); en los retiros por banco, ya con el IRPF descontado. La línea <strong>Tras IRPF</strong> del resumen es una <strong>estimación</strong>: este beneficio sigue en la caja del negocio y no tributa hasta que lo retires por transferencia.</p></div>`;
 
   document.getElementById('modal-dia-contenido').innerHTML = html;
   document.getElementById('modal-dia').classList.remove('oculto');
@@ -570,6 +715,15 @@ function renderVista(v) {
   else if (v === 'retiros') renderRetiros();
   else if (v === 'midinero') renderMiDinero();
   else if (v === 'calendario') renderCalendario();
+  else if (v === 'patrimonio') renderPatrimonio({
+    patrimonio: getPatrimonio(),
+    retiros: datos.retiros,
+    gastosFijosTotal: C.gastoFijoMensual(getGastos()),
+    irpfCfg: getIrpf(),
+    split,
+    f,
+    card,
+  });
   postRender(v);
 }
 function cambiarVista(v) {
@@ -595,9 +749,17 @@ function leerGastosEdit() {
   });
   return Object.values(filas).filter((g) => g.nombre.trim());
 }
+// Lista de conceptos escrita a mano: "Fyrst, Revolut" -> ['Fyrst', 'Revolut'].
+function leerConceptos(id) {
+  return document.getElementById(id).value.split(',').map((s) => s.trim()).filter(Boolean);
+}
 function abrirModal() {
   document.getElementById('g-saldo').value = getSaldo().importe;
   document.getElementById('g-meta').value = getMeta();
+  const irpf = getIrpf();
+  document.getElementById('g-irpf').value = irpf.porcentaje;
+  document.getElementById('g-banco').value = (irpf.conceptosBanco || []).join(', ');
+  document.getElementById('g-cripto').value = (irpf.conceptosCripto || []).join(', ');
   pintarGastosEdit();
   document.getElementById('modal').classList.remove('oculto');
 }
@@ -608,11 +770,23 @@ function guardarModal() {
   const meta = parseFloat(document.getElementById('g-meta').value);
   if (!Number.isNaN(meta)) localStorage.setItem(META_KEY, String(meta));
   localStorage.setItem(GASTOS_KEY, JSON.stringify(leerGastosEdit()));
+  // IRPF: si el porcentaje viene vacío o mal, se conserva el que había (nunca NaN).
+  const pct = parseFloat(document.getElementById('g-irpf').value);
+  localStorage.setItem(IRPF_KEY, JSON.stringify({
+    porcentaje: Number.isNaN(pct) ? (Number(getIrpf().porcentaje) || 0) : pct,
+    conceptosBanco: leerConceptos('g-banco'),
+    conceptosCripto: leerConceptos('g-cripto'),
+  }));
   cerrarModal();
   renderVista(vistaActiva);
 }
 function exportarJSON() {
-  const out = { ...config, saldoBanco: getSaldo(), config: { ...config.config, gastosFijos: getGastos() } };
+  const out = {
+    ...config,
+    saldoBanco: getSaldo(),
+    config: { ...config.config, gastosFijos: getGastos(), irpf: getIrpf() },
+    patrimonio: getPatrimonio(),
+  };
   const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = 'datos.json'; a.click();
@@ -642,6 +816,21 @@ function bind() {
     localStorage.setItem(GASTOS_KEY, JSON.stringify(actuales)); pintarGastosEdit();
   });
   document.getElementById('filtro-retiros').addEventListener('change', renderRetiros);
+  // Filtros de fecha del historial. Se combinan con el select de reparto (todos/yo/david).
+  document.getElementById('filtro-anio').addEventListener('change', () => {
+    // Al cambiar de año los meses disponibles cambian: el mes elegido ya no aplica.
+    document.getElementById('filtro-mes').value = '';
+    renderRetiros();
+  });
+  document.getElementById('filtro-mes').addEventListener('change', renderRetiros);
+  document.getElementById('filtro-desde').addEventListener('change', renderRetiros);
+  document.getElementById('filtro-hasta').addEventListener('change', renderRetiros);
+  document.getElementById('filtro-limpiar').addEventListener('click', () => {
+    ['filtro-anio', 'filtro-mes', 'filtro-desde', 'filtro-hasta'].forEach((id) => { document.getElementById(id).value = ''; });
+    renderRetiros();
+  });
+  // Patrimonio: se engancha una sola vez (bindPatrimonio ya se protege con dataset).
+  bindPatrimonio({ getPatrimonio, setPatrimonio, rerender: () => renderVista('patrimonio') });
   document.getElementById('cal-mes').addEventListener('change', renderCalendario);
   document.getElementById('cal-fecha').addEventListener('change', renderCalendario);
   document.getElementById('cal-grid').addEventListener('click', (e) => {

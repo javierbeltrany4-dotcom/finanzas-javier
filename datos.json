@@ -4,11 +4,17 @@
   "config": {
     "split": { "yo": 0.40, "david": 0.60 },
     "metaMensual": 0,
+    "irpf": {
+      "porcentaje": 20,
+      "conceptosBanco": ["Fyrst"],
+      "conceptosCripto": ["Binance", "Bitbase"]
+    },
     "gastosFijos": [
       { "nombre": "Gimnasio", "importe": 27, "diaPago": 1 },
       { "nombre": "Asesoría", "importe": 75, "diaPago": 1 },
       { "nombre": "Cuota autónomo", "importe": 80, "diaPago": 1 }
     ]
   },
-  "saldoBanco": { "importe": 0, "fechaActualizacion": "2026-06-21" }
+  "saldoBanco": { "importe": 0, "fechaActualizacion": "2026-06-21" },
+  "patrimonio": { "cuentas": [], "objetivos": [] }
 }
