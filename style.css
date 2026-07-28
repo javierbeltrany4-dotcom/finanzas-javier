@@ -619,6 +619,16 @@ tr.meta .fila-tag, .fila-tag.meta { background: var(--green-dim); color: var(--g
 td.col-extra, th.col-extra { color: var(--muted); }
 td.col-extra { color: var(--green); }
 
+/* Columna del bolsillo REAL (IRPF por tramos), la que hay que mirar para decidir. */
+th.col-real { color: var(--muted); }
+td.col-real { font-weight: 600; }
+/* Las cabeceras de la escalera llevan su matiz debajo: sin él, "IRPF" y "En tu bolsillo"
+   no dicen cuál de los dos números son. */
+#obj-escalera th small {
+  display: block; margin-top: 3px; font-weight: 400;
+  font-size: 10px; letter-spacing: 0; text-transform: none; color: var(--dim);
+}
+
 /* ---------- Palancas: qué mover primero ---------- */
 .palanca {
   display: flex; flex-direction: column; gap: 6px;
@@ -640,6 +650,10 @@ td.col-extra { color: var(--green); }
 }
 .palanca-delta.sube { color: var(--green); }
 .palanca-delta.baja, .palanca-delta.neg { color: var(--red); }
+/* La letra pequeña de una palanca que no se puede leer sola (el IRPF a 0 = mudarse). */
+.palanca-nota { font-size: 11.5px; color: var(--muted); line-height: 1.45; margin-top: 2px; }
+.palanca-nota strong { font-family: var(--fm); font-variant-numeric: tabular-nums; color: var(--text); }
+.palanca-nota.mal strong { color: var(--red); }
 .palanca.top { border-color: rgba(0, 200, 150, .4); background: linear-gradient(180deg, var(--green-dim), transparent 60%), var(--surface); }
 
 /* ---------- Ajustes del modelo ---------- */
@@ -724,6 +738,17 @@ td.col-extra { color: var(--green); }
   font-size: 13px; color: var(--muted); line-height: 1.5;
 }
 .obj-contexto strong { color: var(--amber); font-family: var(--fm); }
+
+/* La pareja real de la respuesta grande: el mismo objetivo con el IRPF por tramos.
+   Va pegada a las tarjetas a propósito: los dos números nunca se enseñan por separado. */
+.obj-real {
+  margin-top: 14px; padding: 14px 16px; border-radius: 14px;
+  border: 1px dashed var(--border2); background: var(--surface);
+  font-size: 13px; color: var(--muted); line-height: 1.55;
+}
+.obj-real strong { font-family: var(--fm); font-variant-numeric: tabular-nums; color: var(--text); }
+.obj-real.obj-aviso-real { border-color: var(--amber); background: var(--amber-dim); }
+.obj-real.obj-aviso-real strong { color: var(--amber); }
 
 /* Notas sueltas bajo un bloque (punto muerto, venta extra, quién gana). */
 .obj-notas { display: flex; flex-wrap: wrap; gap: 8px 28px; margin-top: 14px; }

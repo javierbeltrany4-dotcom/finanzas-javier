@@ -110,6 +110,14 @@ const split = () => config.config.split;
 const OBJETIVO_LIMPIO_DEFAULT = 3000;
 const CLAVES_MODELO = Object.keys(O.MODELO_DEFAULT);
 
+// El mes que todavía está abierto, 'YYYY-MM'. objetivo.js es un módulo puro y no puede
+// mirar el reloj, así que "hoy" tiene que entrar desde aquí: sin esto, el mes en curso
+// pesaría en la media lo mismo que un mes cerrado y la hundiría cada día 1.
+function opcionesModelo() {
+  const d = new Date();
+  return { mesActual: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` };
+}
+
 // JSON de localStorage sin reventar si dentro hay basura (una versión vieja, un guardado
 // a medias). Ante la duda, null: los getters de abajo caen a datos.json y siguen.
 function leerJSON(clave) {
@@ -136,7 +144,7 @@ function getModelo() {
   const guardado = modeloGuardado();
   const m = O.normalizarModelo(guardado);
   if (guardado && guardado.fijosManual === true) { m.fijosManual = true; return m; }
-  m.fijosNegocio = O.modeloDesdeDatos(datos, m).modelo.fijosNegocio;
+  m.fijosNegocio = O.modeloDesdeDatos(datos, m, opcionesModelo()).modelo.fijosNegocio;
   return m;
 }
 
@@ -173,12 +181,13 @@ function setObjetivo(v) {
 // las dos hablen exactamente del mismo negocio.
 function modeloVivo() {
   const base = getModelo();
-  const d = O.modeloDesdeDatos(datos, base);
+  const d = O.modeloDesdeDatos(datos, base, opcionesModelo());
   if (!base.fijosManual) return { modelo: d.modelo, ventasMedia: d.ventasMedia, fuente: d.fuente };
   // Con los fijos puestos a mano hay que decirlo en la línea de "de dónde salen los
-  // números": se cambia solo la mitad de los fijos y se conserva la de las ventas.
+  // números": se cambia solo el trozo de los fijos, que es el primero, y se conserva
+  // todo lo demás (las ventas y, si lo hay, el aviso del mes en curso).
   const partes = String((d.fuente && d.fuente.texto) || '').split(' · ');
-  const ventas = partes[partes.length - 1] || '';
+  const ventas = partes.slice(1).join(' · ');
   return {
     modelo: base,
     ventasMedia: d.ventasMedia,

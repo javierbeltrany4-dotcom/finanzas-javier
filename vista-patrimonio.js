@@ -133,6 +133,20 @@ function tieneObjetivo(objetivos, nombre) {
   return objetivos.some((o) => String(o.nombre || '').trim().toLowerCase() === buscado);
 }
 
+// Lo que ya está etiquetado para la MISMA factura: la reserva plana y la real provisionan
+// la misma liquidación anual de IRPF, así que lo que hay en una descuenta de la otra.
+function yaReservadoParaIrpf(objetivos) {
+  const nombres = [NOMBRE_IMPUESTOS, NOMBRE_IMPUESTOS_REAL].map((n) => n.toLowerCase());
+  return objetivos
+    .filter((o) => nombres.includes(String(o.nombre || '').trim().toLowerCase()))
+    .reduce((acc, o) => acc + (Number(o.asignado) || 0), 0);
+}
+
+// A céntimos: un data-importe con 12 decimales acaba en el importe de una reserva.
+function aCentimos(n) {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+
 // El IRPF de verdad, no el plano.
 //
 // La sugerencia de arriba reserva el IRPF PLANO de los retiros ya hechos: un porcentaje
@@ -144,8 +158,14 @@ function tieneObjetivo(objetivos, nombre) {
 //   · te retienen de MENOS -> falta dinero: botón para reservar el IRPF real del año;
 //   · te retienen de MÁS   -> Hacienda devuelve: aviso verde y ningún botón, porque no
 //     hay nada que apartar. Este es el dato que más tranquiliza y no se puede esconder.
+//
+// Las dos reservas apartan dinero para la MISMA liquidación anual, así que no pueden
+// convivir sumándose: cuando aparece la real, la plana se calla, y el importe que ofrece
+// es solo el hueco que falta sobre lo que ya esté etiquetado. Si no, se contaba dos veces
+// y "Libre de verdad" se hundía con una alerta roja falsa.
+// `sustituye` le dice a pintarAvisos que esta reserva manda sobre la plana.
 function bloqueIrpfReal(objetivos, ctx, f) {
-  const vacio = { aviso: '', boton: '' };
+  const vacio = { aviso: '', boton: '', sustituye: false };
   if (!ctx || !ctx.modeloObjetivo) return vacio;
 
   const a = irpfAnualReal(ctx.modeloObjetivo, ctx.ventasMedia || 0);
@@ -157,16 +177,31 @@ function bloqueIrpfReal(objetivos, ctx, f) {
       aviso: `<div class="alerta ok">${ICON_OK}<span>Vas pagando de más: Hacienda debería devolverte <strong>${f(a.diferencia)}</strong>.
         <span class="mc">Te retienes ${f(a.irpfRetenido)} al año y el IRPF real por tramos son ${f(a.irpfReal)}. No tienes que reservar nada extra: ese dinero ya es tuyo, solo que no lo ves hasta la declaración.</span></span></div>`,
       boton: '',
+      sustituye: false,
     };
   }
 
-  // Ni base imponible, o la reserva ya está creada: no se insiste.
-  if (!(a.irpfReal > 0) || tieneObjetivo(objetivos, NOMBRE_IMPUESTOS_REAL)) return vacio;
+  // Sin base imponible no hay factura que provisionar.
+  if (!(a.irpfReal > 0)) return vacio;
 
+  // La reserva real ya existe: la plana sobra igual, así que se calla, pero no se insiste.
+  if (tieneObjetivo(objetivos, NOMBRE_IMPUESTOS_REAL)) return { ...vacio, sustituye: true };
+
+  // La factura entera menos lo que ya esté etiquetado para ella (la reserva plana, si la
+  // hay). Cuando lo etiquetado es justo lo retenido, esto es exactamente lo que falta.
+  const yaHay = yaReservadoParaIrpf(objetivos);
+  const porReservar = aCentimos(Math.max(0, a.irpfReal - yaHay));
+  if (!(porReservar > 0)) return { ...vacio, sustituye: true };
+
+  const conYaHay = yaHay > 0 ? ` Ya tienes ${f(yaHay)} etiquetados para esa misma factura, así que aquí solo va lo que falta.` : '';
+  const etiqueta = yaHay > 0
+    ? `Reservar ${f(porReservar)} — lo que te falta para el IRPF real del año (${f(a.irpfReal)})`
+    : `Reservar ${f(porReservar)} — el IRPF real de todo el año`;
   return {
     aviso: '',
-    boton: `<button type="button" class="btn btn-ghost" id="pat-sug-impuestos-real" data-importe="${a.irpfReal}"
-      title="Te retienes ${f(a.irpfRetenido)} al año y el IRPF real por tramos son ${f(a.irpfReal)}: te faltan ${f(-a.diferencia)}.">Reservar ${f(a.irpfReal)} — IRPF real estimado del año</button>`,
+    boton: `<button type="button" class="btn btn-ghost" id="pat-sug-impuestos-real" data-importe="${porReservar}"
+      title="El IRPF real por tramos son ${f(a.irpfReal)} al año y solo te retienes ${f(a.irpfRetenido)}: te faltan ${f(-a.diferencia)}.${conYaHay}">${etiqueta}</button>`,
+    sustituye: true,
   };
 }
 
@@ -187,8 +222,10 @@ function pintarAvisos(e, objetivos, ctx, f) {
   // Sugerencias: el sistema propone importes, el usuario decide. Son botones, nunca
   // se aplican solos. El importe viaja en data-importe porque bindPatrimonio no ve el ctx.
   const botones = [];
-  if (!tieneObjetivo(objetivos, NOMBRE_IMPUESTOS)) {
-    const imp = sugerenciaImpuestos(ctx.retiros || [], ctx.irpfCfg || IRPF_DEFAULT, splitDe(ctx));
+  // La plana solo si la real no manda: las dos provisionan la misma factura anual y
+  // ofrecerlas a la vez etiquetaba dos veces el mismo dinero.
+  if (!real.sustituye && !tieneObjetivo(objetivos, NOMBRE_IMPUESTOS)) {
+    const imp = aCentimos(sugerenciaImpuestos(ctx.retiros || [], ctx.irpfCfg || IRPF_DEFAULT, splitDe(ctx)));
     botones.push(`<button type="button" class="btn btn-ghost" id="pat-sug-impuestos" data-importe="${imp}">Reservar ${f(imp)} para impuestos</button>`);
   }
   if (real.boton) botones.push(real.boton);

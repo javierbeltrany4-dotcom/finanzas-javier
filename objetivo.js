@@ -254,54 +254,116 @@ function esComision(g) {
   return RE_COMISION.test(String(x.categoria ?? '')) || RE_COMISION.test(String(x.concepto ?? ''));
 }
 
-// Los N meses más recientes que tienen alguna fila. Ordenados de viejo a nuevo.
-function ultimosMeses(lista, n) {
+// El mes 'YYYY-MM' de una fila. '' si la fecha no sirve.
+function mesFila(x) {
+  const mes = String((x && x.fecha) ?? '').slice(0, 7);
+  return /^\d{4}-\d{2}$/.test(mes) ? mes : '';
+}
+
+// Un mes 'YYYY-MM' desplazado n meses (negativo = hacia atrás). Aritmética de enteros
+// a propósito: usar Date aquí metería la zona horaria del sistema en un módulo puro.
+function mesMas(mes, n) {
+  const total = Number(mes.slice(0, 4)) * 12 + (Number(mes.slice(5, 7)) - 1) + n;
+  const anio = Math.floor(total / 12);
+  return `${String(anio).padStart(4, '0')}-${String(total - anio * 12 + 1).padStart(2, '0')}`;
+}
+
+// La ventana sobre la que se promedia: los N meses de CALENDARIO que terminan en el mes
+// más reciente con datos. No "los N meses que tienen filas": un mes sin ventas (o sin
+// gastos apuntados) vale cero y tiene que seguir contando en el denominador. Si
+// desapareciera, la media saldría inflada y el texto de la fuente diría un rango que no
+// es el que se ha dividido.
+// El principio se recorta al primer mes con datos: antes de empezar no había negocio que
+// promediar, y dividir por meses anteriores al primero hundiría la media al revés.
+function ventanaMeses(listas, n) {
   const meses = new Set();
-  for (const x of lista || []) {
-    const mes = String((x && x.fecha) ?? '').slice(0, 7);
-    if (/^\d{4}-\d{2}$/.test(mes)) meses.add(mes);
+  for (const lista of listas || []) {
+    for (const x of lista || []) {
+      const mes = mesFila(x);
+      if (mes) meses.add(mes);
+    }
   }
-  return [...meses].sort().slice(-n);
+  if (!meses.size) return [];
+  const ordenados = [...meses].sort();
+  const ultimo = ordenados[ordenados.length - 1];
+  const primero = ordenados[0];
+  let inicio = mesMas(ultimo, -(Math.max(1, n) - 1));
+  if (inicio < primero) inicio = primero;
+  const rango = [];
+  for (let mes = inicio; mes <= ultimo; mes = mesMas(mes, 1)) rango.push(mes);
+  return rango;
 }
 
 // Rellena el modelo con lo que de verdad ha pasado: los fijos son la media real de
 // los últimos 3 meses (comisiones aparte) y las ventas, las que hubo de media.
 // Si no llegan datos no se inventa nada: se queda con los valores de `base`.
-export function modeloDesdeDatos(datos, base = MODELO_DEFAULT) {
+//
+// `opciones.mesActual` ('YYYY-MM') es el mes que todavía está abierto. El módulo es puro
+// y no puede mirar el reloj, así que "hoy" entra por aquí, desde quien sí lo tiene.
+// Sin él el comportamiento es el de siempre: cuenta todo lo que llegue.
+export function modeloDesdeDatos(datos, base = MODELO_DEFAULT, opciones) {
   const b = normalizarModelo(base);
   const d = datos || {};
+  const o = opciones || {};
   const gastos = Array.isArray(d.gastosNegocio) ? d.gastosNegocio : [];
   const ventas = Array.isArray(d.ventas) ? d.ventas : [];
-  const mesDe = (x) => String((x && x.fecha) ?? '').slice(0, 7);
 
-  const mesesGasto = ultimosMeses(gastos, 3);
+  // El mes en curso no ha terminado: si el día 3 lleva una venta, pesaría en el
+  // denominador lo mismo que un mes cerrado de diez y hundiría la media justo el día que
+  // se abre la app. Se deja fuera... salvo que no quede ningún mes cerrado con datos:
+  // entonces es mejor un mes a medias que una pantalla vacía, y se dice en el texto.
+  const mesActual = /^\d{4}-\d{2}$/.test(String(o.mesActual ?? '')) ? String(o.mesActual) : '';
+  const esAbierto = (x) => {
+    const mes = mesFila(x);
+    return Boolean(mesActual) && Boolean(mes) && mes >= mesActual;
+  };
+  const conFecha = (x) => Boolean(mesFila(x));
+  const hayAbierto = gastos.some(esAbierto) || ventas.some(esAbierto);
+  const hayCerrado = gastos.some((g) => conFecha(g) && !esAbierto(g))
+    || ventas.some((v) => conFecha(v) && !esAbierto(v));
+  const fueraElAbierto = hayAbierto && hayCerrado;
+  const filtrar = (lista) => (fueraElAbierto ? lista.filter((x) => !esAbierto(x)) : lista);
+  const gastosVentana = filtrar(gastos);
+  const ventasVentana = filtrar(ventas);
+
+  // Una sola ventana para los dos: fijos de un trimestre y ventas de otro alimentando el
+  // mismo mes no cuadran bajo ninguna lectura, y se desalineaban en silencio.
+  const meses = ventanaMeses([gastosVentana, ventasVentana], 3);
+  const enVentana = (x) => meses.includes(mesFila(x));
+
+  const gastosDentro = gastosVentana.filter(enVentana);
   let fijosNegocio = b.fijosNegocio;
   let fuenteFijos = 'defecto';
-  if (mesesGasto.length) {
-    const total = gastos
-      .filter((g) => mesesGasto.includes(mesDe(g)) && !esComision(g))
+  if (gastosDentro.length) {
+    const total = gastosDentro
+      .filter((g) => !esComision(g))
       .reduce((acc, g) => acc + num(g && g.total, 0), 0);
-    fijosNegocio = total / mesesGasto.length;
+    fijosNegocio = total / meses.length;
     fuenteFijos = 'datos';
   }
 
-  const mesesVenta = ultimosMeses(ventas, 3);
+  const ventasDentro = ventasVentana.filter(enVentana);
   let ventasMedia = 0;
   let fuenteVentas = 'defecto';
-  if (mesesVenta.length) {
-    ventasMedia = ventas.filter((x) => mesesVenta.includes(mesDe(x))).length / mesesVenta.length;
+  if (ventasDentro.length) {
+    ventasMedia = ventasDentro.length / meses.length;
     fuenteVentas = 'datos';
   }
 
-  const rango = (meses) => (meses.length === 1 ? meses[0] : `${meses[0]} a ${meses[meses.length - 1]}`);
+  const rango = (lista) => (lista.length === 1 ? lista[0] : `${lista[0]} a ${lista[lista.length - 1]}`);
   const textos = [
     fuenteFijos === 'datos'
-      ? `Fijos: media real de ${rango(mesesGasto)}, sin contar comisiones`
+      ? `Fijos: media real de ${rango(meses)}, sin contar comisiones`
       : 'Fijos: valor por defecto, no llegaron gastos',
     fuenteVentas === 'datos'
-      ? `Ventas: media real de ${rango(mesesVenta)}`
+      ? `Ventas: media real de ${rango(meses)}`
       : 'Ventas: valor por defecto, no llegaron ventas',
   ];
+  if (fueraElAbierto) {
+    textos.push(`El mes en curso (${mesActual}) no cuenta todavía: aún no ha terminado`);
+  } else if (hayAbierto) {
+    textos.push(`Incluye el mes en curso (${mesActual}), que aún no ha terminado: la media se moverá`);
+  }
 
   return {
     modelo: normalizarModelo({ ...b, fijosNegocio }),
@@ -309,8 +371,10 @@ export function modeloDesdeDatos(datos, base = MODELO_DEFAULT) {
     fuente: {
       fijosNegocio: fuenteFijos,
       ventasMedia: fuenteVentas,
-      meses: mesesGasto,
-      mesesVentas: mesesVenta,
+      meses,
+      mesesVentas: meses,
+      mesEnCurso: mesActual || null,
+      incluyeMesEnCurso: hayAbierto && !fueraElAbierto,
       texto: textos.join(' · '),
     },
   };

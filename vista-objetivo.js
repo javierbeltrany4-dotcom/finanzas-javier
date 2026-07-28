@@ -146,6 +146,39 @@ function masCercano(lista, valor) {
   return mejor;
 }
 
+// La fila "AHORA" tiene que ser la del usuario DE VERDAD. masCercano siempre devuelve
+// algo, así que con listas que empiezan en 3 ventas a alguien que hace 0 se le marcaba
+// como "AHORA" un escenario que no es el suyo, contradiciendo el número grande de arriba.
+// Si su cifra no está en la lista, se le abre hueco en su sitio.
+function conFilaDeHoy(lista, v) {
+  const i = lista.findIndex((n) => Math.abs(n - v) < 0.05);
+  if (i >= 0) return { lista, iHoy: i };
+  const nueva = [...lista, v].sort((a, b) => a - b);
+  return { lista: nueva, iHoy: nueva.indexOf(v) };
+}
+
+// Lo que de verdad queda al mes con el IRPF por tramos, no con el 20 % que se retiene.
+function bolsilloRealMes(m, ventas) {
+  return irpfAnualReal(m, ventas).bolsilloAnualReal / 12;
+}
+
+// Las ventas que hacen falta para quedarse limpio con `objetivo` DESPUÉS del IRPF real.
+// No se despeja como ventasParaLimpiar porque la escala va por tramos: se busca por
+// bisección, que vale porque el bolsillo real crece de forma monótona con las ventas.
+// null si no se llega ni vendiendo mucho.
+function ventasParaLimpiarReal(m, objetivo) {
+  const MAX = 1000;
+  if (!(bolsilloRealMes(m, MAX) >= objetivo)) return null;
+  if (bolsilloRealMes(m, 0) >= objetivo) return 0;
+  let lo = 0;
+  let hi = MAX;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    if (bolsilloRealMes(m, mid) >= objetivo) hi = mid; else lo = mid;
+  }
+  return hi;
+}
+
 // Último ctx pintado. Se guarda para poder refrescar solo los resultados mientras el
 // usuario teclea, sin obligar a los handlers a reconstruir el contexto entero.
 let ctxUltimo = null;
@@ -180,7 +213,7 @@ function pintarInversaForm(c) {
     <label class="obj-meta-label" for="obj-meta">Quiero quedarme limpio con</label>
     <input id="obj-meta" class="obj-meta-input" type="number" inputmode="decimal" step="50" min="0"
       value="${esc(paraInput(c.objetivo))}" placeholder="3000" aria-label="Euros limpios al mes" />
-    <div class="obj-meta-pie mc">euros al mes, ya libres de todo</div>
+    <div class="obj-meta-pie mc">euros al mes, limpios con el ${pctTexto(c.modelo.irpf)} que te retienes (justo debajo, con el IRPF real)</div>
     <div class="obj-rapidos">${rapidos}</div>
   </div>
   <div id="obj-inversa-res"></div>`;
@@ -212,8 +245,49 @@ function pintarInversaRes(c) {
     ? `<span class="pos">Ya lo consigues.</span> Con tus ${ventasTexto(ventasMedia)} ventas al mes te quedan ${euros(f, bolsilloHoy)} limpios.`
     : `Ahora haces ${ventasTexto(ventasMedia)} ventas al mes. Te faltan <strong>${ventasTexto(faltan)}</strong>.`;
 
+  // El número de arriba sale del 20 % que se RETIENE, no del IRPF real por tramos. Es
+  // justo la confusión que esta pantalla existe para deshacer, así que su pareja real va
+  // pegada debajo y no en otro bloque: nunca uno sin el otro.
   return `<div class="grid grid-3 obj-cards">${tarjetas}</div>
+    ${notaIrpfRealMeta(c, r)}
     <p class="obj-contexto">${contexto}</p>`;
+}
+
+// La respuesta de arriba, recalculada con el IRPF real de esas mismas ventas.
+function notaIrpfRealMeta(c, r) {
+  const { modelo, objetivo, f } = c;
+  const a = irpfAnualReal(modelo, r.ventasExactas);
+  const real = a.bolsilloAnualReal / 12;
+  if (!Number.isFinite(real)) return '';
+
+  const falta = objetivo - real;
+  const nReal = ventasParaLimpiarReal(modelo, objetivo);
+  // Si al redondear salen las mismas ventas, repetirlas suena a error de la pantalla.
+  const mismasVentas = nReal !== null && ventasTexto(nReal) === ventasTexto(r.ventas);
+  let cola = '';
+  if (nReal === null) {
+    cola = ` Con el IRPF real, a ${eurosCortos(objetivo)} limpios no se llega con este modelo.`;
+  } else if (!mismasVentas) {
+    cola = ` Para ${euros(f, objetivo)} limpios DE VERDAD hacen falta <strong>${ventasTexto(nReal)}</strong> ventas al mes.`;
+  }
+
+  // Ámbar solo cuando el 20 % se queda corto: ahí el número de arriba promete de más.
+  const clase = a.diferencia < 0 ? ' obj-aviso-real' : '';
+  const cabeza = `Con esas ${ventasTexto(r.ventas)} ventas te retienes el ${pctTexto(modelo.irpf)}`;
+
+  if (Math.abs(falta) < 1) {
+    return `<p class="obj-real${clase}">${cabeza} y el IRPF real por tramos son ${euros(f, a.irpfReal)} al año:
+      sale casi clavado, te quedarían <strong>${euros(f, real)}</strong> al mes.</p>`;
+  }
+  // El 20 % retiene de más: la respuesta de arriba se queda corta a tu favor. Este es el
+  // lado tranquilizador y hay que decirlo igual de claro que el otro.
+  if (falta < 0) {
+    return `<p class="obj-real${clase}">${cabeza}, pero el IRPF real por tramos es más bajo: ${euros(f, a.irpfReal)} al año.
+      En el bolsillo te quedarían <strong>${euros(f, real)}</strong> al mes, más de los ${euros(f, objetivo)} que pediste:
+      lo que retienes de más te lo devuelven.</p>`;
+  }
+  return `<p class="obj-real${clase}">${cabeza}, pero el IRPF real por tramos son ${euros(f, a.irpfReal)} al año:
+    en el bolsillo te quedarían <strong>${euros(f, real)}</strong> al mes, no ${euros(f, objetivo)}.${cola}</p>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -314,8 +388,8 @@ function pintarIrpf(c) {
 
   // La curva real: el mismo modelo a 3, 10, 20 y 30 ventas. Sirve para ver que el tipo
   // medio sube despacio y nunca alcanza al marginal.
-  const iHoy = masCercano(VENTAS_CURVA_IRPF, v);
-  const filas = VENTAS_CURVA_IRPF.map((n, i) => {
+  const { lista: curva, iHoy } = conFilaDeHoy(VENTAS_CURVA_IRPF, v);
+  const filas = curva.map((n, i) => {
     const x = irpfAnualReal(m, n);
     const hoy = i === iHoy;
     return `<tr${hoy ? ' class="hoy"' : ''}>
@@ -392,8 +466,8 @@ function pintarDubaiRes(c) {
       <span class="mc">Tú estás en ${ventasTexto(v)}. Por debajo del cruce pierdes dinero mudándote; por encima, ganas.</span></div>`;
   }
 
-  const iHoy = masCercano(VENTAS_DUBAI, v);
-  const filas = VENTAS_DUBAI.map((n, i) => {
+  const { lista: escenarios, iHoy } = conFilaDeHoy(VENTAS_DUBAI, v);
+  const filas = escenarios.map((n, i) => {
     const x = comparativaFiscal(m, n, d);
     const hoy = i === iHoy;
     const clases = [hoy ? 'hoy' : '', x.compensa ? 'meta' : ''].filter(Boolean).join(' ');
@@ -444,12 +518,21 @@ function pintarEscalera(c) {
   const { modelo: m, ventasMedia: v, objetivo, f } = c;
   const filas = escalera(m, ESCALONES);
   const iHoy = masCercano(ESCALONES, v);
-  // La meta es el primer escalón que ya deja en el bolsillo lo que el usuario pidió.
-  const iMeta = filas.findIndex((r) => r.bolsillo >= objetivo);
+  // La meta es el primer escalón que deja lo pedido en el bolsillo DE VERDAD, con el IRPF
+  // por tramos. Medirla contra el bolsillo del 20 % señalaba escalones que no llegan:
+  // con 6.000 € de meta marcaba 20 ventas cuando de verdad hacen falta 30.
+  const iMeta = filas.findIndex((r) => bolsilloRealMes(m, r.ventas) >= objetivo);
 
   const cuerpo = filas.map((r, i) => {
     const clases = [i === iHoy ? 'hoy' : '', i === iMeta ? 'meta' : ''].filter(Boolean).join(' ');
     const tags = `${i === iHoy ? '<span class="fila-tag ahora">AHORA</span>' : ''}${i === iMeta ? '<span class="fila-tag meta">TU META</span>' : ''}`;
+    // Lo que deja UNA venta más en este escalón. No vale r.porVentaAdicional: ese es el
+    // salto contra el escalón ANTERIOR y ESCALONES no va de uno en uno, así que en las
+    // filas de arriba multiplicaba la cifra por el tamaño del salto (hasta 10x).
+    const marginal = r.ventas <= 0
+      ? null
+      : resultadoMensual(m, r.ventas).bolsillo - resultadoMensual(m, r.ventas - 1).bolsillo;
+    const real = bolsilloRealMes(m, r.ventas);
     return `<tr${clases ? ` class="${clases}"` : ''}>
       <td class="num">${ventasTexto(r.ventas)}${tags}</td>
       <td class="num">${euros(f, r.facturacion)}</td>
@@ -457,7 +540,8 @@ function pintarEscalera(c) {
       <td class="num">${euros(f, r.miParte)}</td>
       <td class="num col-irpf">${euros(f, r.irpfPagado)}</td>
       <td class="num ${r.bolsillo >= 0 ? 'pos' : 'neg'}">${euros(f, r.bolsillo)}</td>
-      <td class="num col-extra">${r.porVentaAdicional === null ? '—' : euros(f, r.porVentaAdicional)}</td>
+      <td class="num col-real ${real >= 0 ? 'pos' : 'neg'}">${euros(f, real)}</td>
+      <td class="num col-extra">${marginal === null ? '—' : euros(f, marginal)}</td>
     </tr>`;
   }).join('');
 
@@ -467,8 +551,9 @@ function pintarEscalera(c) {
       <th class="num">Facturas</th>
       <th class="num">Beneficio</th>
       <th class="num">Tu ${pctTexto(m.miShare)}</th>
-      <th class="num col-irpf">IRPF</th>
-      <th class="num">En tu bolsillo</th>
+      <th class="num col-irpf">IRPF retenido (${pctTexto(m.irpf)})</th>
+      <th class="num">En tu bolsillo<small>con el ${pctTexto(m.irpf)} retenido</small></th>
+      <th class="num col-real">En tu bolsillo de verdad<small>con el IRPF real por tramos</small></th>
       <th class="num col-extra">Cada venta extra</th>
     </tr></thead>
     <tbody>${cuerpo}</tbody>
@@ -479,14 +564,44 @@ function pintarEscalera(c) {
 // F) Palancas
 // ---------------------------------------------------------------------------
 
-function pintarPalancas(c) {
+// La palanca del IRPF a 0 es la única que no se puede leer sola: quitar el IRPF es
+// mudarse, y mudarse cuesta ~10.000 € al año que esa palanca no descuenta. Encima aplica
+// el 20 % RETENIDO, no el IRPF real por tramos. Resultado: por debajo del punto de cruce
+// pintaba en verde "ganas" mientras el bloque de Dubái, tres centímetros más arriba,
+// decía "pierdes". Aquí se corrige el rótulo y se pega el número bueno al lado.
+const PALANCA_IRPF = 'Dejar de pagar IRPF';
+
+function palancaDubai(p, c) {
   const { modelo: m, ventasMedia: v, f } = c;
-  return palancas(m, v).map((p, i) => `<div class="palanca${i === 0 ? ' acento top' : ''}">
-    <div class="palanca-nombre">${esc(p.nombre)}</div>
-    <div class="palanca-detalle">${esc(p.detalle)}</div>
-    <div class="palanca-valor">${euros(f, p.bolsilloNuevo)}</div>
-    <div class="palanca-delta ${p.delta >= 0 ? 'sube' : 'baja'}">${p.delta >= 0 ? '+' : ''}${euros(f, p.delta)} al mes</div>
-  </div>`).join('');
+  if (p.nombre !== PALANCA_IRPF) {
+    return { detalle: p.detalle, nota: '', baja: p.delta < 0 };
+  }
+  const comp = comparativaFiscal(m, v, c.dubai);
+  const cruce = ventasParaDubai(m, c.dubai);
+  const desde = cruce === null || cruce <= 0 ? '' : ` El cruce está en ${ventasTexto(cruce)} ventas al mes.`;
+  const nota = comp.diferencia >= 0
+    ? `Con la estructura de Dubái pagada, hoy son <strong>+${euros(f, comp.diferencia)}</strong> al año, no ${euros(f, p.delta * 12)}.${desde}`
+    : `Esto NO es gratis: mudarse cuesta la estructura. Con ella pagada, hoy son <strong>${euros(f, comp.diferencia)}</strong> al año, no ${euros(f, p.delta * 12)}.${desde}`;
+  return {
+    detalle: `Del ${pctTexto(m.irpf)} retenido al 0 %`,
+    nota: `<div class="palanca-nota${comp.diferencia < 0 ? ' mal' : ''}">${nota}</div>`,
+    // El delta se pinta en rojo cuando mudarse sale a perder, aunque el número sea positivo.
+    baja: p.delta < 0 || comp.diferencia < 0,
+  };
+}
+
+function pintarPalancas(c) {
+  const { f } = c;
+  return palancas(c.modelo, c.ventasMedia).map((p, i) => {
+    const x = palancaDubai(p, c);
+    return `<div class="palanca${i === 0 ? ' acento top' : ''}">
+      <div class="palanca-nombre">${esc(p.nombre)}</div>
+      <div class="palanca-detalle">${esc(x.detalle)}</div>
+      <div class="palanca-valor">${euros(f, p.bolsilloNuevo)}</div>
+      <div class="palanca-delta ${x.baja ? 'baja' : 'sube'}">${p.delta >= 0 ? '+' : ''}${euros(f, p.delta)} al mes</div>
+      ${x.nota}
+    </div>`;
+  }).join('');
 }
 
 function pintarPalancasNota(c) {
@@ -497,6 +612,14 @@ function pintarPalancasNota(c) {
   const segunda = lista[1];
   if (primera.delta <= 0) {
     return 'Ninguna de estas palancas mejora tu bolsillo con los números de ahora.';
+  }
+  // Si la del IRPF queda la primera y mudarse todavía sale a perder, no se puede anunciar
+  // como "lo que más paga hoy": ese número no lleva descontada la estructura de Dubái.
+  if (primera.nombre === PALANCA_IRPF && comparativaFiscal(m, v, c.dubai).diferencia < 0) {
+    const segundaTxt = segunda
+      ? ` Lo que de verdad más paga hoy: <strong>${esc(segunda.nombre.toLowerCase())}</strong>, ${euros(f, segunda.delta)} más al mes.`
+      : '';
+    return `El IRPF sale arriba, pero quitarlo es mudarse y la estructura no está descontada ahí: mira el bloque "España o Dubái".${segundaTxt}`;
   }
   const contra = segunda
     ? ` Le saca ${euros(f, primera.delta - segunda.delta)} a la siguiente (${esc(segunda.nombre.toLowerCase())}).`
