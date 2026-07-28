@@ -4,7 +4,8 @@
 //
 // Dos ideas que la pantalla tiene que dejar cerradas, porque son las que dan ansiedad:
 //   1) el 20 % es lo que se RETIENE cada mes, no lo que se acaba pagando. El IRPF real va por
-//      tramos: hoy Hacienda devuelve, escalando hará falta apartar. Siempre los dos números juntos.
+//      tramos, y por eso la respuesta grande de la inversa se calcula CON los tramos: la
+//      retención plana queda como comparativa pequeña debajo, nunca como la respuesta.
 //   2) Dubái no es gratis: cuesta lo mismo se gane poco o mucho, así que tiene un punto de cruce.
 //      No se opina: se enseña el número y a partir de cuántas ventas cambia el signo.
 
@@ -18,6 +19,10 @@ import {
   escalera,
   palancas,
   irpfAnualReal,
+  bolsilloRealMes,
+  ventasParaLimpiarReal,
+  situacionFiscalDelAnio,
+  TRAMOS_IRPF,
   comparativaFiscal,
   ventasParaDubai,
 } from './objetivo.js';
@@ -32,20 +37,23 @@ const OBJETIVO_DEFAULT = 3000;
 
 const METAS_RAPIDAS = [1000, 2000, 3000, 5000, 10000];
 const ESCALONES = [0, 1, 2, 3, 5, 7, 10, 15, 20, 30, 40];
-const VENTAS_CURVA_IRPF = [3, 10, 20, 30];
 const VENTAS_DUBAI = [3, 5, 7.5, 10, 20, 40];
 
-// Campos editables del modelo: clave, etiqueta con unidad y paso del input.
+const MESES_LARGO = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+// Campos editables del modelo: clave, etiqueta con unidad, paso del input y una línea
+// que dice qué es y de dónde ha salido el valor actual. La de los fijos es dinámica
+// (sale de c.fuente) y por eso aquí va vacía: ver descFijos().
 const CAMPOS_MODELO = [
-  ['ticket', 'Ticket con IVA (€)', 1],
-  ['iva', 'IVA (%)', 1],
-  ['comisionPct', 'Comisión de la pasarela (%)', 0.01],
-  ['fijosNegocio', 'Gastos fijos del negocio (€/mes)', 1],
-  ['miShare', 'Mi parte del beneficio (%)', 1],
-  ['cuotaAutonomo', 'Cuota de autónomo (€/mes)', 1],
-  ['deducibles', 'Asesoría, deducible (€/mes)', 1],
-  ['gastosPersonales', 'Gastos personales, NO deducibles (€/mes)', 1],
-  ['irpf', 'IRPF que te retienes (%)', 1],
+  ['ticket', 'Ticket con IVA (€)', 1, 'Lo que paga el cliente por una venta, con el IVA dentro. Es tu precio actual.'],
+  ['iva', 'IVA (%)', 1, 'Va dentro del precio y nunca es tuyo. El 21 % general de España.'],
+  ['comisionPct', 'Comisión de la pasarela (%)', 0.01, 'Lo que se queda Stripe/PayPal de cada cobro. Medido de 6 meses de comisiones reales.'],
+  ['fijosNegocio', 'Gastos fijos del negocio (€/mes)', 1, ''],
+  ['miShare', 'Mi parte del beneficio (%)', 1, 'Lo que te toca del beneficio; David tiene el resto. Vuestro acuerdo actual.'],
+  ['cuotaAutonomo', 'Cuota de autónomo (€/mes)', 1, 'Tu tarifa plana actual de la Seguridad Social. Cuando se acabe, sube: corrígelo aquí ese día.'],
+  ['deducibles', 'Asesoría, deducible (€/mes)', 1, 'Se resta ANTES del IRPF porque Hacienda la admite. Tu cuota de asesoría actual.'],
+  ['gastosPersonales', 'Gastos personales, NO deducibles (€/mes)', 1, 'Gimnasio y similares: se restan DESPUÉS del IRPF porque Hacienda no los admite.'],
+  ['irpf', 'Porcentaje que apartas de tu base cada mes (%)', 1, 'El porcentaje de tu base que apartas cada mes. NO es el IRPF final: ese va por tramos y se calcula solo, arriba.'],
 ];
 
 const CAMPOS_DUBAI = [
@@ -157,27 +165,35 @@ function conFilaDeHoy(lista, v) {
   return { lista: nueva, iHoy: nueva.indexOf(v) };
 }
 
-// Lo que de verdad queda al mes con el IRPF por tramos, no con el 20 % que se retiene.
-function bolsilloRealMes(m, ventas) {
-  return irpfAnualReal(m, ventas).bolsilloAnualReal / 12;
+// bolsilloRealMes y ventasParaLimpiarReal vivían aquí; ahora se importan de
+// objetivo.js: la lógica de dinero no vive en vistas.
+
+// Ventas del mes de `hoy` contadas de los datos reales. null si no llegaron datos o
+// fecha: así el que pinta sabe distinguir "0 ventas" (real) de "no sé" (sin datos).
+function ventasDelMes(datos, hoy) {
+  const mes = String(hoy || '').slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(mes)) return null;
+  const lista = datos && Array.isArray(datos.ventas) ? datos.ventas : null;
+  if (!lista) return null;
+  return lista.filter((v) => String((v && v.fecha) || '').slice(0, 7) === mes).length;
 }
 
-// Las ventas que hacen falta para quedarse limpio con `objetivo` DESPUÉS del IRPF real.
-// No se despeja como ventasParaLimpiar porque la escala va por tramos: se busca por
-// bisección, que vale porque el bolsillo real crece de forma monótona con las ventas.
-// null si no se llega ni vendiendo mucho.
-function ventasParaLimpiarReal(m, objetivo) {
-  const MAX = 1000;
-  if (!(bolsilloRealMes(m, MAX) >= objetivo)) return null;
-  if (bolsilloRealMes(m, 0) >= objetivo) return 0;
-  let lo = 0;
-  let hi = MAX;
-  for (let i = 0; i < 60; i++) {
-    const mid = (lo + hi) / 2;
-    if (bolsilloRealMes(m, mid) >= objetivo) hi = mid; else lo = mid;
-  }
-  return hi;
+// ['2026-04', '2026-05', '2026-06'] -> "abril a junio de 2026". Para decir de dónde
+// salen los fijos medidos sin obligar al usuario a leer fechas ISO.
+function rangoMesesTexto(meses) {
+  const lista = Array.isArray(meses) ? meses.filter((m) => /^\d{4}-\d{2}$/.test(String(m))) : [];
+  if (!lista.length) return '';
+  const nombre = (ym) => MESES_LARGO[Number(ym.slice(5, 7)) - 1] || ym;
+  const p = lista[0];
+  const u = lista[lista.length - 1];
+  if (p === u) return `${nombre(u)} de ${u.slice(0, 4)}`;
+  if (p.slice(0, 4) === u.slice(0, 4)) return `${nombre(p)} a ${nombre(u)} de ${u.slice(0, 4)}`;
+  return `${nombre(p)} de ${p.slice(0, 4)} a ${nombre(u)} de ${u.slice(0, 4)}`;
 }
+
+// Qué mes pinta la cascada: el del objetivo (por defecto) o el de hoy. Vive a nivel de
+// módulo porque los chips se reescriben con cada repintado y no pueden guardar nada.
+let cascModo = 'objetivo';
 
 // Último ctx pintado. Se guarda para poder refrescar solo los resultados mientras el
 // usuario teclea, sin obligar a los handlers a reconstruir el contexto entero.
@@ -192,6 +208,9 @@ function prepararCtx(ctx) {
     ventasMedia: Math.max(0, num(c.ventasMedia, 0)),
     objetivo: Math.max(0, num(c.objetivo, OBJETIVO_DEFAULT)),
     fuente: c.fuente || null,
+    // Los datos reales y el "hoy" entran desde app.js: la vista no mira el reloj.
+    datos: c.datos || null,
+    hoy: /^\d{4}-\d{2}-\d{2}$/.test(String(c.hoy ?? '')) ? String(c.hoy) : '',
     f: typeof c.f === 'function' ? c.f : formatoEuros,
     card: typeof c.card === 'function' ? c.card : cardPorDefecto,
   };
@@ -213,15 +232,18 @@ function pintarInversaForm(c) {
     <label class="obj-meta-label" for="obj-meta">Quiero quedarme limpio con</label>
     <input id="obj-meta" class="obj-meta-input" type="number" inputmode="decimal" step="50" min="0"
       value="${esc(paraInput(c.objetivo))}" placeholder="3000" aria-label="Euros limpios al mes" />
-    <div class="obj-meta-pie mc">euros al mes, limpios con el ${pctTexto(c.modelo.irpf)} que te retienes (justo debajo, con el IRPF real)</div>
+    <div class="obj-meta-pie mc">euros al mes, limpios de verdad: la respuesta usa el IRPF real por tramos</div>
     <div class="obj-rapidos">${rapidos}</div>
   </div>
   <div id="obj-inversa-res"></div>`;
 }
 
+// La respuesta grande sale de ventasParaLimpiarReal (IRPF por tramos), que es el que se
+// acaba pagando. La retención plana ya no es la respuesta: queda como comparativa
+// pequeña debajo, para ver los dos números juntos.
 function pintarInversaRes(c) {
   const { modelo, ventasMedia, objetivo, f } = c;
-  const r = ventasParaLimpiar(modelo, objetivo);
+  const r = ventasParaLimpiarReal(modelo, objetivo);
 
   // Sin solución: se dice por qué y se corta. Nunca un NaN ni un Infinity en pantalla.
   if (!r || !Number.isFinite(r.ventasExactas)) {
@@ -234,60 +256,35 @@ function pintarInversaRes(c) {
 
   const card = c.card;
   const tarjetas = [
-    cardCon('acento', 'Ventas al mes', `<span class="num">${ventasTexto(r.ventas)}</span>`, 'esta es la respuesta'),
+    cardCon('acento', 'Ventas al mes', `<span class="num">${ventasTexto(r.ventas)}</span>`, 'con el IRPF real por tramos: esta es la respuesta'),
     card('Facturas al mes', `<span class="num">${euros(f, r.facturacionMes)}</span>`, 'lo que tiene que entrar por caja, IVA incluido'),
     card('Facturas al año', `<span class="num">${euros(f, r.facturacionAnio)}</span>`, 'lo mismo, a doce meses'),
   ].join('');
 
+  // La comparativa con la retención plana: el otro número, pequeño y debajo.
+  const rPlana = ventasParaLimpiar(modelo, objetivo);
+  let plana = '';
+  if (rPlana && Number.isFinite(rPlana.ventasExactas)) {
+    plana = ventasTexto(rPlana.ventas) === ventasTexto(r.ventas)
+      ? `<p class="mc obj-plana">Con la retención plana del ${pctTexto(modelo.irpf)} sale lo mismo: ${ventasTexto(rPlana.ventas)} ventas.</p>`
+      : `<p class="mc obj-plana">Con la retención plana del ${pctTexto(modelo.irpf)} serían ${ventasTexto(rPlana.ventas)} ventas.</p>`;
+  }
+
+  // Contexto en vivo: las ventas que de verdad lleva este mes y su media de meses
+  // cerrados, contadas de los datos. Y cuánto le falta (o si ya llega) con esa media.
+  const n = ventasDelMes(c.datos, c.hoy);
+  const vivo = n === null
+    ? ''
+    : `Este mes llevas <strong>${n}</strong> venta${n === 1 ? '' : 's'} · tu media de meses cerrados es <strong>${ventasTexto(ventasMedia)}</strong>. `;
   const faltan = r.ventasExactas - ventasMedia;
-  const bolsilloHoy = resultadoMensual(modelo, ventasMedia).bolsillo;
-  const contexto = faltan <= 0.05
-    ? `<span class="pos">Ya lo consigues.</span> Con tus ${ventasTexto(ventasMedia)} ventas al mes te quedan ${euros(f, bolsilloHoy)} limpios.`
-    : `Ahora haces ${ventasTexto(ventasMedia)} ventas al mes. Te faltan <strong>${ventasTexto(faltan)}</strong>.`;
+  const bolsilloHoy = bolsilloRealMes(modelo, ventasMedia);
+  const estado = faltan <= 0.05
+    ? `<span class="pos">Ya lo consigues:</span> con esa media te quedan ${euros(f, bolsilloHoy)} limpios de verdad.`
+    : `Para el objetivo te faltan <strong>${ventasTexto(faltan)}</strong> sobre tu media.`;
 
-  // El número de arriba sale del 20 % que se RETIENE, no del IRPF real por tramos. Es
-  // justo la confusión que esta pantalla existe para deshacer, así que su pareja real va
-  // pegada debajo y no en otro bloque: nunca uno sin el otro.
   return `<div class="grid grid-3 obj-cards">${tarjetas}</div>
-    ${notaIrpfRealMeta(c, r)}
-    <p class="obj-contexto">${contexto}</p>`;
-}
-
-// La respuesta de arriba, recalculada con el IRPF real de esas mismas ventas.
-function notaIrpfRealMeta(c, r) {
-  const { modelo, objetivo, f } = c;
-  const a = irpfAnualReal(modelo, r.ventasExactas);
-  const real = a.bolsilloAnualReal / 12;
-  if (!Number.isFinite(real)) return '';
-
-  const falta = objetivo - real;
-  const nReal = ventasParaLimpiarReal(modelo, objetivo);
-  // Si al redondear salen las mismas ventas, repetirlas suena a error de la pantalla.
-  const mismasVentas = nReal !== null && ventasTexto(nReal) === ventasTexto(r.ventas);
-  let cola = '';
-  if (nReal === null) {
-    cola = ` Con el IRPF real, a ${eurosCortos(objetivo)} limpios no se llega con este modelo.`;
-  } else if (!mismasVentas) {
-    cola = ` Para ${euros(f, objetivo)} limpios DE VERDAD hacen falta <strong>${ventasTexto(nReal)}</strong> ventas al mes.`;
-  }
-
-  // Ámbar solo cuando el 20 % se queda corto: ahí el número de arriba promete de más.
-  const clase = a.diferencia < 0 ? ' obj-aviso-real' : '';
-  const cabeza = `Con esas ${ventasTexto(r.ventas)} ventas te retienes el ${pctTexto(modelo.irpf)}`;
-
-  if (Math.abs(falta) < 1) {
-    return `<p class="obj-real${clase}">${cabeza} y el IRPF real por tramos son ${euros(f, a.irpfReal)} al año:
-      sale casi clavado, te quedarían <strong>${euros(f, real)}</strong> al mes.</p>`;
-  }
-  // El 20 % retiene de más: la respuesta de arriba se queda corta a tu favor. Este es el
-  // lado tranquilizador y hay que decirlo igual de claro que el otro.
-  if (falta < 0) {
-    return `<p class="obj-real${clase}">${cabeza}, pero el IRPF real por tramos es más bajo: ${euros(f, a.irpfReal)} al año.
-      En el bolsillo te quedarían <strong>${euros(f, real)}</strong> al mes, más de los ${euros(f, objetivo)} que pediste:
-      lo que retienes de más te lo devuelven.</p>`;
-  }
-  return `<p class="obj-real${clase}">${cabeza}, pero el IRPF real por tramos son ${euros(f, a.irpfReal)} al año:
-    en el bolsillo te quedarían <strong>${euros(f, real)}</strong> al mes, no ${euros(f, objetivo)}.${cola}</p>`;
+    ${plana}
+    <p class="obj-contexto">${vivo}${estado}</p>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -307,10 +304,40 @@ function filaCasc(cpt, small, imp, facturacion, f, cls = '') {
   </div>`;
 }
 
+// La cascada sigue al objetivo: por defecto pinta el mes que haría falta para la meta
+// (las ventas de la inversa real), y con los chips se puede volver al mes de hoy.
+// En modo objetivo el IRPF de la fila es el REAL por tramos, no la retención plana:
+// enseñar el desglose de la meta con un IRPF que no es el suyo volvería a mentir.
 function pintarCascada(c) {
-  const { modelo: m, ventasMedia: v, f } = c;
+  const { modelo: m, ventasMedia, objetivo, f } = c;
+  const rObj = ventasParaLimpiarReal(m, objetivo);
+  const hayObjetivo = rObj !== null && Number.isFinite(rObj.ventasExactas);
+  const modo = cascModo === 'hoy' || !hayObjetivo ? 'hoy' : 'objetivo';
+  const v = modo === 'objetivo' ? rObj.ventasExactas : ventasMedia;
+
+  const chips = `<div class="seg obj-casc-sel" id="obj-casc-modo">
+    <button type="button" data-modo="hoy"${modo === 'hoy' ? ' class="on"' : ''}>Hoy (${ventasTexto(ventasMedia)} ventas)</button>
+    <button type="button" data-modo="objetivo"${modo === 'objetivo' ? ' class="on"' : ''}${hayObjetivo ? '' : ' disabled'}>Mi objetivo (${hayObjetivo ? ventasTexto(rObj.ventas) : '—'} ventas)</button>
+  </div>`;
+  const pie = modo === 'objetivo'
+    ? `<p class="mc obj-casc-pie">El mes de tu objetivo: ${ventasTexto(rObj.ventas)} ventas para quedarte ${eurosCortos(objetivo)} limpios. Cambia el objetivo arriba y esto se recalcula.</p>`
+    : `<p class="mc obj-casc-pie">Tu mes de ahora, con la media real de ${ventasTexto(ventasMedia)} ventas.</p>`;
+
   const r = resultadoMensual(m, v);
   const fac = r.facturacion;
+
+  // El IRPF de la fila y todo lo que cuelga de él dependen del modo.
+  let filaIrpf, trasIrpf, bolsillo;
+  if (modo === 'objetivo') {
+    const irpfMes = irpfAnualReal(m, v).irpfReal / 12;
+    trasIrpf = r.miParte - r.cuota - irpfMes;
+    bolsillo = bolsilloRealMes(m, v);
+    filaIrpf = filaCasc('IRPF real (por tramos)', `lo que de verdad toca a estas ventas, no el ${pctTexto(m.irpf)} plano`, Math.abs(irpfMes), fac, f, 'casc-resta');
+  } else {
+    trasIrpf = r.trasIrpf;
+    bolsillo = r.bolsillo;
+    filaIrpf = filaCasc(`IRPF retenido (${pctTexto(m.irpf)})`, 'lo que apartas cada mes, no la factura final', Math.abs(r.irpfPagado), fac, f, 'casc-resta');
+  }
 
   const filas = [
     filaCasc('Facturación', `${ventasTexto(v)} ventas × ${euros(f, m.ticket)} con IVA`, r.facturacion, fac, f),
@@ -321,11 +348,11 @@ function pintarCascada(c) {
     filaCasc('BENEFICIO DEL NEGOCIO', 'lo que queda para repartir', r.beneficio, fac, f, 'casc-hito'),
     filaCasc(`Tu ${pctTexto(m.miShare)}`, 'tu parte del beneficio', r.miParte, fac, f, 'casc-sub'),
     filaCasc('Cuota de autónomo', 'tarifa plana: cuando se acabe, sube', Math.abs(r.cuota), fac, f, 'casc-resta'),
-    filaCasc(`IRPF retenido (${pctTexto(m.irpf)})`, 'lo que apartas cada mes, no la factura final', Math.abs(r.irpfPagado), fac, f, 'casc-resta'),
-    filaCasc('Tras impuestos', 'antes de tus gastos personales', r.trasIrpf, fac, f, 'casc-sub'),
+    filaIrpf,
+    filaCasc('Tras impuestos', 'antes de tus gastos personales', trasIrpf, fac, f, 'casc-sub'),
     filaCasc('Asesoría', 'deducible: se resta ANTES del IRPF', Math.abs(r.deducibles), fac, f, 'casc-resta'),
     filaCasc('Gimnasio', 'no deducible: se resta DESPUÉS', Math.abs(m.gastosPersonales), fac, f, 'casc-resta'),
-    filaCasc('EN TU BOLSILLO', 'limpio, ya libre de todo', r.bolsillo, fac, f, `casc-final${r.bolsillo < 0 ? ' negativo' : ''}`),
+    filaCasc('EN TU BOLSILLO', 'limpio, ya libre de todo', bolsillo, fac, f, `casc-final${bolsillo < 0 ? ' negativo' : ''}`),
   ].join('');
 
   const pm = puntoMuerto(m);
@@ -333,10 +360,13 @@ function pintarCascada(c) {
     ? 'Con estos números una venta no deja nada al negocio: no hay punto muerto. Revisa el ticket o la comisión.'
     : `Punto muerto: <strong>${decTexto(pm, 2)}</strong> ventas al mes. Por debajo de ahí el negocio pierde dinero.`;
 
-  const extra = resultadoMensual(m, v + 1).bolsillo - r.bolsillo;
+  // El "cada venta de más" también respeta el IRPF del modo: en objetivo, el real.
+  const extra = modo === 'objetivo'
+    ? bolsilloRealMes(m, v + 1) - bolsillo
+    : resultadoMensual(m, v + 1).bolsillo - r.bolsillo;
   const notaExtra = `Cada venta de más te deja <strong class="${extra >= 0 ? 'pos' : 'neg'}">${euros(f, extra)}</strong> limpios en el bolsillo.`;
 
-  return `<div class="casc">${filas}</div>
+  return `${chips}${pie}<div class="casc">${filas}</div>
     <div class="obj-notas">
       <div class="obj-nota">${notaPm}</div>
       <div class="obj-nota">${notaExtra}</div>
@@ -344,81 +374,101 @@ function pintarCascada(c) {
 }
 
 // ---------------------------------------------------------------------------
-// C) Lo que retienes contra lo que de verdad pagas
+// C) El tramo en vivo: la foto fiscal del año en curso
 // ---------------------------------------------------------------------------
+// Todo sale de situacionFiscalDelAnio con los datos reales de Tradingverso: lo ganado
+// de enero a hoy, anualizado y pasado por la escala. CERO inputs en este bloque.
 
 function pintarIrpf(c) {
-  const { modelo: m, ventasMedia: v, f, card } = c;
-  const a = irpfAnualReal(m, v);
-  const devuelven = a.diferencia > 0;
-  const cuadra = Math.abs(a.diferencia) < 1;
+  const { modelo: m, f, card } = c;
+  const s = situacionFiscalDelAnio(c.datos, m, c.hoy);
+  const d = c.datos || {};
+  const hayDatos = ((d.ventas || []).length > 0 || (d.gastosNegocio || []).length > 0)
+    && s.mesesTranscurridos >= 1;
+  if (!hayDatos) {
+    return '<p class="obj-nota">Todavía no hay datos del año en curso: en cuanto lleguen ventas o gastos de Tradingverso, este panel se calcula solo.</p>';
+  }
+
+  const tipoTramo = TRAMOS_IRPF[s.tramo].tipo;
+  const base = Math.max(0, s.baseProyectada);
+
+  // La escala entera como barra de segmentos: el tramo del usuario iluminado y una
+  // marca en el punto exacto de su base proyectada dentro de ese tramo.
+  const segs = TRAMOS_IRPF.map((t, i) => {
+    const suelo = i === 0 ? 0 : TRAMOS_IRPF[i - 1].hasta;
+    const activo = i === s.tramo;
+    let marca = '';
+    if (activo) {
+      // En el último tramo (sin techo) la marca se ancla a una escala del propio suelo.
+      const ancho = Number.isFinite(t.hasta) ? t.hasta - suelo : Math.max(1, suelo);
+      const pos = Math.max(0.05, Math.min(0.95, ancho > 0 ? (base - suelo) / ancho : 0.5));
+      marca = `<span class="tramo-marca" style="left:${(pos * 100).toFixed(1)}%" title="Tu base proyectada: ${euros(f, base)}"></span>`;
+    }
+    const lim = Number.isFinite(t.hasta)
+      ? `hasta ${eurosCortos(t.hasta)}`
+      : `más de ${eurosCortos(TRAMOS_IRPF[i - 1].hasta)}`;
+    return `<div class="tramo-seg${activo ? ' on' : ''}">${marca}<span class="pct">${t.tipo} %</span><span class="lim">${lim}</span></div>`;
+  }).join('');
+
+  const cabeza = `<div class="tramo-head">
+      <span class="l">Con lo que llevas ganado este año, proyectado a diciembre</span>
+      <div class="v">Vas por el tramo ${s.tramo + 1} (${tipoTramo} %)</div>
+    </div>
+    <div class="tramo-barra">${segs}</div>
+    <p class="tramo-pie">La marca ámbar es tu base proyectada: ${euros(f, base)}. Cada tramo grava solo lo que cae dentro de él: subir de tramo no encarece lo de abajo.</p>`;
+
+  const mesHoy = MESES_LARGO[s.mesesTranscurridos - 1] || '';
+  const lineas = `<div class="tramo-datos">
+    <div>
+      <span class="l">Llevas ganado este año (tu ${pctTexto(m.miShare)})</span>
+      <span class="v num">${euros(f, s.miParteYtd)}</span>
+      <span class="mc">de enero a ${mesHoy}, de tus ventas y gastos reales</span>
+    </div>
+    <div>
+      <span class="l">Base proyectada a diciembre</span>
+      <span class="v num">${euros(f, s.baseProyectada)}</span>
+      <span class="mc">a este ritmo, tras cuota de autónomo y asesoría</span>
+    </div>
+  </div>`;
 
   const duo = `<div class="obj-duo">
     <div class="obj-duo-col">
-      <div class="l">Te retienen al año</div>
-      <div class="v num">${euros(f, a.irpfRetenido)}</div>
-      <span class="mc">el ${pctTexto(m.irpf)} que apartas todos los meses</span>
+      <div class="l">Retendrás este año</div>
+      <div class="v num">${euros(f, s.retenidoProyectado)}</div>
+      <span class="mc">el ${pctTexto(m.irpf)} de tu base (tu parte tras cuota y asesoría), proyectado a diciembre</span>
     </div>
     <div class="obj-duo-vs">contra</div>
     <div class="obj-duo-col">
-      <div class="l">De verdad te toca</div>
-      <div class="v num">${euros(f, a.irpfReal)}</div>
-      <span class="mc">IRPF real por tramos sobre ${euros(f, Math.max(0, a.baseAnual))} de base</span>
+      <div class="l">De verdad te tocará</div>
+      <div class="v num">${euros(f, s.irpfRealProyectado)}</div>
+      <span class="mc">IRPF real por tramos sobre la base proyectada</span>
     </div>
   </div>`;
 
   let veredicto;
-  if (cuadra) {
-    veredicto = `<div class="obj-veredicto">Vas justo: lo que retienes es casi exactamente lo que pagas.
-      <span class="mc">Diferencia de ${euros(f, Math.abs(a.diferencia))} al año.</span></div>`;
-  } else if (devuelven) {
-    veredicto = `<div class="obj-veredicto ok">Hacienda te devuelve ${euros(f, a.diferencia)}
-      <span class="mc">Estás pagando de más cada mes. Es tuyo, pero no lo ves hasta la declaración.</span></div>`;
+  if (Math.abs(s.diferencia) < 1) {
+    veredicto = `<div class="obj-veredicto">Vas justo: lo que retienes es casi exactamente lo que pagarás.
+      <span class="mc">Diferencia de ${euros(f, Math.abs(s.diferencia))} al año.</span></div>`;
+  } else if (s.diferencia > 0) {
+    veredicto = `<div class="obj-veredicto ok">Te devolverán ${euros(f, s.diferencia)}
+      <span class="mc">Retienes de más. Es tuyo, pero no lo verás hasta la declaración.</span></div>`;
   } else {
-    veredicto = `<div class="obj-veredicto mal">Tienes que apartar ${euros(f, -a.diferencia)} — no es tuyo
-      <span class="mc">Con lo que retienes no llega: esa diferencia te la van a reclamar en la declaración.</span></div>`;
+    veredicto = `<div class="obj-veredicto mal">Aparta ${euros(f, -s.diferencia)} — no es tuyo
+      <span class="mc">Con tu retención no llega: esa diferencia te la reclamarán en la declaración.</span></div>`;
   }
 
+  const sinBase = s.baseProyectada <= 0
+    ? '<p class="obj-nota">Con lo que llevas este año no llegas a base imponible: de IRPF, cero.</p>'
+    : '';
+
   const tarjetas = `<div class="grid grid-3">
-    ${card('Tipo medio real', `<span class="num pos">${pctTexto(a.tipoMedio)}</span>`, 'lo que pagas de verdad sobre el total')}
-    ${card('Tipo marginal', `<span class="num">${pctTexto(a.tipoMarginal)}</span>`, 'lo que pagarías por el siguiente euro')}
-    ${card('Lo que te retienes', `<span class="num">${pctTexto(m.irpf)}</span>`, 'el porcentaje del modelo, mes a mes')}
+    ${card('Tipo medio real', `<span class="num pos">${pctTexto(s.tipoMedio)}</span>`, 'lo que pagas de verdad sobre el total')}
+    ${card('Tipo marginal', `<span class="num">${pctTexto(s.tipoMarginal)}</span>`, 'lo que pagarías por el siguiente euro')}
+    ${card('Lo que te apartas', `<span class="num">${pctTexto(m.irpf)}</span>`, 'de tu base, mes a mes')}
   </div>
   <p class="mc obj-explica">${EXPLICACION_TIPOS}</p>`;
 
-  // La curva real: el mismo modelo a 3, 10, 20 y 30 ventas. Sirve para ver que el tipo
-  // medio sube despacio y nunca alcanza al marginal.
-  const { lista: curva, iHoy } = conFilaDeHoy(VENTAS_CURVA_IRPF, v);
-  const filas = curva.map((n, i) => {
-    const x = irpfAnualReal(m, n);
-    const hoy = i === iHoy;
-    return `<tr${hoy ? ' class="hoy"' : ''}>
-      <td class="num">${ventasTexto(n)}${hoy ? '<span class="fila-tag ahora">AHORA</span>' : ''}</td>
-      <td class="num">${euros(f, Math.max(0, x.baseAnual))}</td>
-      <td class="num col-irpf">${euros(f, x.irpfReal)}</td>
-      <td class="num pos">${pctTexto(x.tipoMedio)}</td>
-      <td class="num">${pctTexto(x.tipoMarginal)}</td>
-    </tr>`;
-  }).join('');
-
-  const tabla = `<div class="tabla-wrap obj-mini">
-    <table>
-      <thead><tr>
-        <th class="num">Ventas/mes</th>
-        <th class="num">Base anual</th>
-        <th class="num col-irpf">IRPF real</th>
-        <th class="num">Tipo medio</th>
-        <th class="num">Tipo marginal</th>
-      </tr></thead>
-      <tbody>${filas}</tbody>
-    </table>
-  </div>`;
-
-  const sinBase = a.baseAnual <= 0
-    ? '<p class="obj-nota">Con estas ventas no llegas a base imponible: de IRPF, cero.</p>'
-    : '';
-
-  return duo + veredicto + sinBase + tarjetas + tabla;
+  return cabeza + lineas + duo + veredicto + sinBase + tarjetas;
 }
 
 // ---------------------------------------------------------------------------
@@ -522,10 +572,14 @@ function pintarEscalera(c) {
   // por tramos. Medirla contra el bolsillo del 20 % señalaba escalones que no llegan:
   // con 6.000 € de meta marcaba 20 ventas cuando de verdad hacen falta 30.
   const iMeta = filas.findIndex((r) => bolsilloRealMes(m, r.ventas) >= objetivo);
+  // AHORA sigue siendo la media de meses cerrados; si las ventas que lleva ESTE mes
+  // caen en otra fila, se marca aparte para que vea el mes en curso sin perder la media.
+  const nMes = ventasDelMes(c.datos, c.hoy);
+  const iMes = nMes === null ? -1 : masCercano(ESCALONES, nMes);
 
   const cuerpo = filas.map((r, i) => {
     const clases = [i === iHoy ? 'hoy' : '', i === iMeta ? 'meta' : ''].filter(Boolean).join(' ');
-    const tags = `${i === iHoy ? '<span class="fila-tag ahora">AHORA</span>' : ''}${i === iMeta ? '<span class="fila-tag meta">TU META</span>' : ''}`;
+    const tags = `${i === iHoy ? '<span class="fila-tag ahora">AHORA</span>' : ''}${i === iMeta ? '<span class="fila-tag meta">TU META</span>' : ''}${i === iMes && i !== iHoy ? '<span class="fila-tag mes">ESTE MES</span>' : ''}`;
     // Lo que deja UNA venta más en este escalón. No vale r.porVentaAdicional: ese es el
     // salto contra el escalón ANTERIOR y ESCALONES no va de uno en uno, así que en las
     // filas de arriba multiplicaba la cifra por el tamaño del salto (hasta 10x).
@@ -628,24 +682,48 @@ function pintarPalancasNota(c) {
 }
 
 // ---------------------------------------------------------------------------
-// G) Ajustes del modelo
+// G) Ajustes — solo si algo cambia
 // ---------------------------------------------------------------------------
+// El usuario no tiene que rellenar nada aquí: todo lo de arriba ya se deriva de sus
+// datos. Cada campo dice qué es y de dónde ha salido su valor actual, para que quede
+// claro que esto es un corrector, no un formulario.
+
+// De dónde salen los fijos que ve en el campo: medidos, puestos a mano o de fábrica.
+function descFijos(c) {
+  const fu = c.fuente || {};
+  if (fu.fijosNegocio === 'manual') {
+    return 'Los escribiste tú a mano; "Volver a los valores por defecto" recupera la media medida de tus gastos reales.';
+  }
+  if (fu.fijosNegocio === 'datos') {
+    const rango = rangoMesesTexto(fu.meses);
+    return rango
+      ? `Medido de tus gastos reales de ${rango}, sin contar comisiones.`
+      : 'Medido de tus gastos reales, sin contar comisiones.';
+  }
+  return 'Valor por defecto: todavía no han llegado gastos reales que medir.';
+}
 
 function pintarAjustes(c) {
   const m = c.modelo;
   // Ojo con el prefijo: los ids van con "obj-m-" y no con "obj-", porque "obj-irpf"
   // ya es el div del bloque de IRPF y dos ids iguales romperían getElementById.
-  const filas = CAMPOS_MODELO.map(([k, etiqueta, paso]) => `<div class="pat-fila">
-    <label for="obj-m-${k}">${etiqueta}</label>
-    <input id="obj-m-${k}" class="pat-imp" type="number" inputmode="decimal" step="${paso}"
-      data-obj="modelo" data-k="${k}" value="${esc(paraInput(m[k]))}" />
-  </div>`).join('');
+  const filas = CAMPOS_MODELO.map(([k, etiqueta, paso, desc]) => {
+    const texto = k === 'fijosNegocio' ? descFijos(c) : desc;
+    return `<div class="obj-ajuste">
+      <label for="obj-m-${k}">${etiqueta}</label>
+      <input id="obj-m-${k}" type="number" inputmode="decimal" step="${paso}"
+        data-obj="modelo" data-k="${k}" value="${esc(paraInput(m[k]))}" />
+      <span class="obj-ajuste-desc">${texto}</span>
+    </div>`;
+  }).join('');
 
   const fuente = c.fuente && c.fuente.texto
     ? `<span class="obj-fuente">${esc(c.fuente.texto)}</span>`
     : '';
 
-  return `<div class="obj-ajustes">
+  return `<p class="obj-ajustes-intro">Todo lo de arriba se calcula solo con tus datos reales.
+      Esto es para corregirme si algo cambia (subes el precio, se acaba la tarifa plana…).</p>
+    <div class="obj-ajustes">
       ${filas}
       <div class="obj-ajustes-pie">
         <button type="button" class="btn btn-ghost" id="obj-reset">Volver a los valores por defecto</button>
@@ -779,7 +857,14 @@ export function bindObjetivo(handlers) {
   raiz.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
-    if (btn.dataset.meta !== undefined) {
+    // Los chips de la cascada: solo cambian qué mes se pinta, no tocan ningún estado
+    // guardado, así que basta con repintar los resultados (los chips viven ahí dentro).
+    if (btn.dataset.modo && btn.closest('#obj-casc-modo')) {
+      cascModo = btn.dataset.modo === 'hoy' ? 'hoy' : 'objetivo';
+      const c = ctxVivo();
+      ctxUltimo = c;
+      pintarResultados(c);
+    } else if (btn.dataset.meta !== undefined) {
       llamar(h.setObjetivo, Math.max(0, parseFloat(btn.dataset.meta) || 0));
       repintarTodo();
     } else if (btn.id === 'obj-reset') {

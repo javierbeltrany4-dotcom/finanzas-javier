@@ -844,6 +844,10 @@ function renderVista(v) {
       ventasMedia: mv.ventasMedia,
       objetivo: getObjetivo(),
       fuente: mv.fuente,
+      // Los datos reales y el "hoy": la vista cuenta con ellos las ventas del mes en
+      // curso y la foto fiscal del año (situacionFiscalDelAnio). Ella no mira el reloj.
+      datos,
+      hoy: hoyISO(),
       f,
       card,
     });

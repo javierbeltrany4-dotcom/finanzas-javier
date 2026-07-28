@@ -9,7 +9,7 @@
 //   · los deducibles (asesoría) se restan ANTES del IRPF y los gastos personales
 //     (gimnasio) DESPUÉS, porque Hacienda no los admite.
 
-import { formatoEuros } from './calculos.js';
+import { formatoEuros, ventasNetasEntre, gastosEntre } from './calculos.js';
 
 // Valores reales del negocio a julio de 2026. Cambiarlos aquí cambia todo el módulo.
 export const MODELO_DEFAULT = {
@@ -462,6 +462,128 @@ export function irpfAnualReal(m, ventas, tramos = TRAMOS_IRPF, minimoPersonal = 
     // Lo que de verdad queda en el bolsillo al cerrar el año, con el IRPF real.
     bolsilloAnualReal: mes.miParte * 12 - x.cuotaAutonomo * 12 - irpfReal
       - x.deducibles * 12 - x.gastosPersonales * 12,
+  };
+}
+
+// El bolsillo de un mes pero con el IRPF REAL: la base mensual anualizada pasa por la
+// escala (irpfPorTramos(baseIrpf·12)/12) en vez de por la retención plana del modelo.
+// Vivía en la vista; la lógica de dinero no vive en vistas, así que se movió aquí.
+export function bolsilloRealMes(m, ventas, tramos = TRAMOS_IRPF, minimoPersonal = MINIMO_PERSONAL) {
+  return irpfAnualReal(m, ventas, tramos, minimoPersonal).bolsilloAnualReal / 12;
+}
+
+// "Quiero quedarme limpio con X DE VERDAD": la inversa contra bolsilloRealMes.
+// Con la escala por tramos no hay despeje cerrado como en ventasParaLimpiar: se busca
+// por bisección, que vale porque el bolsillo real crece de forma monótona con las
+// ventas. Devuelve la misma forma que la inversa plana; null si ni 10000 ventas llegan.
+export function ventasParaLimpiarReal(m, objetivoBolsillo, tramos = TRAMOS_IRPF, minimoPersonal = MINIMO_PERSONAL) {
+  const x = normalizarModelo(m);
+  const objetivo = num(objetivoBolsillo, 0);
+  const MAX = 10000;
+  const bolsillo = (v) => bolsilloRealMes(x, v, tramos, minimoPersonal);
+
+  if (!(bolsillo(MAX) >= objetivo)) return null;
+
+  let ventasExactas = 0;
+  if (!(bolsillo(0) >= objetivo)) {
+    let lo = 0;
+    let hi = MAX;
+    for (let i = 0; i < 80; i++) {
+      const mid = (lo + hi) / 2;
+      if (bolsillo(mid) >= objetivo) hi = mid; else lo = mid;
+    }
+    ventasExactas = hi;
+  }
+
+  const facturacionMes = ventasExactas * x.ticket;
+  return {
+    ventas: Math.round(ventasExactas * 10) / 10,
+    ventasExactas,
+    facturacionMes,
+    facturacionAnio: facturacionMes * 12,
+  };
+}
+
+// En qué tramo de la escala cae una base anual (0..5). Base negativa o nula: tramo 0.
+function indiceTramo(baseAnual, tramos = TRAMOS_IRPF) {
+  const base = Math.max(0, num(baseAnual, 0));
+  const t = Array.isArray(tramos) && tramos.length ? tramos : TRAMOS_IRPF;
+  for (let i = 0; i < t.length; i++) if (base <= t[i].hasta) return i;
+  return t.length - 1;
+}
+
+// La foto fiscal del año EN CURSO, calculada sola a partir de los datos reales de
+// Tradingverso: nada de pedirle al usuario un porcentaje que se puede derivar.
+// Del año de `hoyISO` ('YYYY-MM-DD') se toma lo que va del 1 de enero hasta hoy,
+// se anualiza a ritmo constante y se pasa por la escala por tramos.
+//   · beneficioYtd  = ventas netas − gastos del negocio, del 1 de enero a hoy
+//   · miParteYtd    = beneficioYtd · miShare
+//   · baseYtd       = miParteYtd − (cuota + deducibles) · meses transcurridos
+//   · baseProyectada = baseYtd / meses · 12  (julio -> 7 meses)
+// Bordes: sin datos (o fecha inválida) todo va a 0 y tramo 0, nunca un NaN; con un
+// solo mes (enero) la proyección funciona igual.
+export function situacionFiscalDelAnio(datos, m, hoyISO, tramos = TRAMOS_IRPF, minimoPersonal = MINIMO_PERSONAL) {
+  const x = normalizarModelo(m);
+  const d = datos || {};
+  const ventas = Array.isArray(d.ventas) ? d.ventas : [];
+  const gastos = Array.isArray(d.gastosNegocio) ? d.gastosNegocio : [];
+
+  const hoy = /^\d{4}-\d{2}-\d{2}$/.test(String(hoyISO ?? '')) ? String(hoyISO) : '';
+  const meses = hoy ? Number(hoy.slice(5, 7)) : 0;
+  // Solo cuentan los datos de ESTE año: si en enero solo hay ventas del año pasado,
+  // proyectar con ellas daría una base inventada.
+  const delAnio = (x) => String((x && x.fecha) ?? '').slice(0, 4) === hoy.slice(0, 4);
+  const hayDatos = hoy
+    ? ventas.some(delAnio) || gastos.some(delAnio)
+    : ventas.length > 0 || gastos.length > 0;
+
+  // Sin datos no hay año que proyectar: todo a cero en vez de proyectar en negativo
+  // las cuotas de meses sobre los que no sabemos nada.
+  if (!hayDatos || !(meses >= 1 && meses <= 12)) {
+    return {
+      beneficioYtd: 0,
+      miParteYtd: 0,
+      baseYtd: 0,
+      baseProyectada: 0,
+      irpfRealProyectado: 0,
+      tipoMedio: 0,
+      tipoMarginal: tipoMarginal(0, tramos),
+      retenidoProyectado: 0,
+      diferencia: 0,
+      tramo: 0,
+      mesesTranscurridos: meses >= 1 && meses <= 12 ? meses : 0,
+    };
+  }
+
+  const eneroUno = `${hoy.slice(0, 4)}-01-01`;
+  const beneficioYtd = ventasNetasEntre(ventas, eneroUno, hoy) - gastosEntre(gastos, eneroUno, hoy);
+  const miParteYtd = beneficioYtd * (x.miShare / 100);
+  const baseYtd = miParteYtd - (x.cuotaAutonomo + x.deducibles) * meses;
+
+  // Tiempo transcurrido en meses CON DECIMALES. Con meses enteros, el día 1 de cada mes
+  // el divisor sube de golpe mientras los ingresos del mes nuevo aún son cero: la
+  // proyección se desplomaba un 19 % de un día para otro y parecía que el negocio se
+  // hundía. Contando la fracción del mes en curso, la curva es continua.
+  const diaDelMes = Number(hoy.slice(8, 10));
+  const diasDelMes = new Date(Date.UTC(Number(hoy.slice(0, 4)), meses, 0)).getUTCDate();
+  const transcurrido = (meses - 1) + diaDelMes / diasDelMes;
+  const baseProyectada = (baseYtd / transcurrido) * 12;
+
+  const irpfRealProyectado = irpfPorTramos(baseProyectada, tramos, minimoPersonal);
+  const retenidoProyectado = Math.max(0, baseProyectada) * (x.irpf / 100);
+
+  return {
+    beneficioYtd,
+    miParteYtd,
+    baseYtd,
+    baseProyectada,
+    irpfRealProyectado,
+    tipoMedio: tipoMedioReal(baseProyectada, tramos, minimoPersonal),
+    tipoMarginal: tipoMarginal(baseProyectada, tramos),
+    retenidoProyectado,
+    diferencia: retenidoProyectado - irpfRealProyectado,
+    tramo: indiceTramo(baseProyectada, tramos),
+    mesesTranscurridos: meses,
   };
 }
 

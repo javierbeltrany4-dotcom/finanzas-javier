@@ -3,7 +3,7 @@
 // Antes era caché primero: rápido, pero te enseñaba la versión vieja aunque hubiera una nueva,
 // y había que recargar dos veces para verla. Ahora, si hay internet, siempre ves lo último;
 // la caché solo entra cuando no hay red o cuando tarda demasiado.
-const CACHE = 'mis-finanzas-v8';
+const CACHE = 'mis-finanzas-v9';
 const SHELL = [
   './', './index.html', './style.css', './app.js', './calculos.js', './tradinverso.js',
   './patrimonio.js', './vista-patrimonio.js',

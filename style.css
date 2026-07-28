@@ -842,3 +842,75 @@ td.col-real { font-weight: 600; }
   .pat-fila label { flex: 1 1 auto; width: 100%; }
   .obj-ajustes-dubai { grid-template-columns: 1fr; }
 }
+
+/* ---------- Inversa real: la comparativa con la retención plana ---------- */
+.obj-plana { margin-top: 10px; font-size: 12px; color: var(--muted); }
+
+/* ---------- Cascada: chips de modo (hoy / mi objetivo) ---------- */
+.obj-casc-sel { margin-bottom: 4px; }
+.obj-casc-sel button[disabled] { opacity: .45; cursor: default; }
+.obj-casc-pie { margin: 8px 0 12px; line-height: 1.5; }
+
+/* ---------- Panel de tramo en vivo ---------- */
+.tramo-head .l {
+  display: block; font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .08em;
+}
+.tramo-head .v {
+  font-size: clamp(22px, 4.6vw, 30px); font-weight: 800; letter-spacing: -.02em;
+  margin-top: 6px; color: var(--text);
+}
+.tramo-barra {
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px;
+  margin-top: 14px;
+}
+.tramo-seg {
+  position: relative; overflow: hidden; text-align: center;
+  padding: 10px 4px 8px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface);
+}
+.tramo-seg .pct {
+  display: block; font-family: var(--fm); font-variant-numeric: tabular-nums;
+  font-size: 13.5px; color: var(--muted);
+}
+.tramo-seg .lim { display: block; font-size: 9.5px; color: var(--dim); margin-top: 3px; }
+.tramo-seg.on { border-color: var(--green); background: var(--green-dim); }
+.tramo-seg.on .pct { color: var(--green); font-weight: 700; }
+/* La marca de la base proyectada, dentro del tramo activo. */
+.tramo-marca { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--amber); }
+.tramo-pie { font-size: 11.5px; color: var(--muted); line-height: 1.5; margin-top: 8px; }
+
+/* Lo ganado del año y la base proyectada, en dos columnas como el dúo. */
+.tramo-datos {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px;
+}
+.tramo-datos > div {
+  border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); padding: 16px 18px;
+}
+.tramo-datos .l {
+  display: block; font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .08em;
+}
+.tramo-datos .v {
+  display: block; font-size: clamp(17px, 3.4vw, 23px); font-weight: 700; margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.tramo-datos .mc { display: block; margin-top: 8px; line-height: 1.45; }
+#obj-irpf .obj-duo { margin-top: 16px; }
+
+/* La fila de la escalera donde caen las ventas de ESTE mes (si no es la de AHORA). */
+.fila-tag.mes { background: var(--surface2); color: var(--muted); border: 1px solid var(--border2); }
+
+/* ---------- Ajustes que se explican ---------- */
+.obj-ajustes-intro { font-size: 13px; color: var(--muted); line-height: 1.55; margin-bottom: 14px; max-width: 72ch; }
+.obj-ajuste-desc { font-size: 10.5px; color: var(--dim); line-height: 1.45; }
+
+@media (max-width: 640px) {
+  .tramo-barra { gap: 3px; }
+  .tramo-seg { padding: 8px 2px 6px; border-radius: 8px; }
+  .tramo-seg .pct { font-size: 11.5px; }
+  .tramo-seg .lim { display: none; }
+  .tramo-datos { grid-template-columns: 1fr; gap: 8px; }
+  .obj-ajustes { grid-template-columns: 1fr; }
+}
