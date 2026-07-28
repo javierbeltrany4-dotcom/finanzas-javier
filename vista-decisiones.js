@@ -470,14 +470,16 @@ function pintarCamino(c) {
   const pasados = lista.filter((h) => h.alcanzado).reverse();
   const futuros = lista.filter((h) => !h.alcanzado);
 
-  const rotulo = new Map(GRUPOS_CAMINO);
-  let grupoActual = null;
+  // Un rótulo por grupo, la primera vez que aparece. Si todos los pendientes caen en el
+  // mismo grupo no hace falta ninguno: no hay nada de lo que separarlos.
+  const variosGrupos = new Set(futuros.map(grupoDe)).size > 1;
+  const vistos = new Set();
   const pasosFuturos = futuros.map((h, i) => {
     const g = grupoDe(h);
-    const sep = g !== grupoActual && futuros.some((x) => grupoDe(x) !== g)
-      ? `<li class="dec-camino-sep">${esc(rotulo.get(g) || '')}</li>`
+    const sep = variosGrupos && !vistos.has(g)
+      ? `<li class="dec-camino-sep">${esc(ROTULO_GRUPO[g] || '')}</li>`
       : '';
-    grupoActual = g;
+    vistos.add(g);
     return sep + pasoCamino(h, i === 0 ? 'ahora' : 'futuro', i === 0);
   }).join('');
 
@@ -605,7 +607,7 @@ function pintarPaises(c) {
     <div class="dec-paises">${filas}</div>
     ${avisoBali}
     ${siguiente}
-    <p class="dec-pie">Solo impuestos y estructura: no incluye lo que cuesta vivir en cada sitio, que puede darle la vuelta a todo. La cifra de aquí sale de tu ritmo de ventas; la pestaña "Dónde vivir" usa la proyección de lo que llevas de año, así que puede salir algo distinta.
+    <p class="dec-pie">Solo impuestos y estructura: no incluye lo que cuesta vivir en cada sitio, que puede darle la vuelta a todo. El beneficio con el que se compara es el mismo aquí, en los hitos de arriba y en "Dónde vivir": una sola cifra para toda la app, para que no haya dos respuestas a la misma pregunta.
       <button type="button" class="btn btn-ghost dec-ir" data-ir="residencia">Ver el detalle en "Dónde vivir"</button></p>`;
 }
 

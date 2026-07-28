@@ -1228,6 +1228,18 @@ td.col-real { font-weight: 600; }
   letter-spacing: -.03em; color: var(--green);
 }
 .dec-sig-big.sin-dato span { color: var(--amber); }
+/* Un umbral que NO quieres cruzar no se pinta del mismo verde que una meta: en verde,
+   "95 %" se lee como "casi lo tienes" cuando significa "casi lo pierdes". */
+.dec-sig-big.aviso span { color: var(--amber); }
+.dec-sig.aviso {
+  border-color: rgba(245, 166, 35, .32);
+  background: linear-gradient(180deg, rgba(245, 166, 35, .06), transparent 45%), var(--surface);
+}
+.dec-sig.aviso.ya {
+  border-color: rgba(255, 92, 92, .45);
+  background: linear-gradient(180deg, var(--red-dim), transparent 45%), var(--surface);
+}
+.dec-sig-umbral { margin-top: 18px; font-size: 13px; color: var(--amber); line-height: 1.55; }
 .dec-sig-big small,
 .dec-sig-eur small {
   display: block; margin-top: 9px; font-size: 11px; color: var(--muted);
@@ -1295,6 +1307,20 @@ td.col-real { font-weight: 600; }
 }
 .dec-paso-punto svg { width: 11px; height: 11px; }
 .dec-paso.hecho .dec-paso-punto { border-color: rgba(0, 200, 150, .5); }
+/* Un aviso cruzado no lleva visto verde: no lo has conseguido, te ha pasado. */
+.dec-paso-punto.cruzado { border-color: rgba(245, 166, 35, .55); color: var(--amber); }
+.dec-paso.ahora.aviso .dec-paso-det {
+  border-color: rgba(245, 166, 35, .45);
+  background: linear-gradient(180deg, var(--amber-dim), transparent 60%), var(--surface);
+}
+.dec-paso.ahora.aviso .dec-paso-punto { border-color: var(--amber); background: var(--amber); box-shadow: 0 0 12px var(--amber-dim); }
+.dec-paso.ahora.aviso .dec-paso-dist { color: var(--amber); }
+/* El rótulo que separa los grupos del camino: no cuelga de la línea de tiempo. */
+.dec-camino-sep {
+  list-style: none; margin: 20px 0 8px; font-size: 10px; line-height: 1.5;
+  text-transform: uppercase; letter-spacing: .1em; color: var(--dim);
+}
+.dec-camino-sep:first-child { margin-top: 0; }
 .dec-paso.ahora .dec-paso-punto { border-color: var(--green); background: var(--green); box-shadow: 0 0 12px var(--green-dim); }
 .dec-paso.futuro .dec-paso-punto { border-color: var(--dim); }
 .dec-paso-tit { flex: 1 1 auto; min-width: 0; font-size: 13.5px; font-weight: 600; line-height: 1.4; }

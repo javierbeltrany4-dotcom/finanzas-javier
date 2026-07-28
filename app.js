@@ -305,9 +305,11 @@ function marcarSyncOk() {
   ultimaSync = t;
   return t;
 }
+// "Hay sincronización" significa que ha funcionado alguna vez, no que los campos tengan
+// buena pinta. La misma vara que usa pintarEstadoDatos().
 function haySync() {
   const c = getSync();
-  return SYNC.validarCredenciales(c.url, c.clave).ok;
+  return SYNC.validarCredenciales(c.url, c.clave).ok && !!getSyncOk();
 }
 
 // Modelo + ventas medias ya resueltos contra los datos reales de Tradingverso. Lo usan
@@ -401,8 +403,15 @@ function setNum(id, val) { const el = document.getElementById(id); if (el) { el.
 const CK = '<svg class="vic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 const CX = '<svg class="vic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
 
-function renderVerificacion() {
-  const cont = document.getElementById('verificacion');
+// La capa de confianza: de dónde salen estas cifras y si se puede uno fiar de ellas.
+//
+// Vive en DOS sitios porque hay dos pantallas de entrada. `destino` dice en cuál se pinta;
+// `compacto` deja fuera la lista de comprobaciones, que en "Y ahora qué" empujaría el
+// semáforo fuera de la primera pantalla del iPhone. Lo que NUNCA se recorta es el aviso de
+// que los datos vienen de caché: sin él, la pantalla afirma con la misma cara datos de hoy
+// y datos de hace tres semanas, y esa es la diferencia entre informar y asustar.
+function renderVerificacion(destino = 'verificacion', compacto = false) {
+  const cont = document.getElementById(destino);
   if (!cont) return;
   const r = C.verificarDatos(datos, split());
   let stale = '';
@@ -411,7 +420,7 @@ function renderVerificacion() {
   }
   const badge = r.ok
     ? `<div class="trust ok">${ICON_OK}<div><strong>Datos verificados</strong><span>Las cifras cuadran con Tradingverso · ${desdeCache ? 'guardado ' + fechaCorta(ultimaActualizacion) : 'en vivo, ' + haceCuanto(ultimaActualizacion)}</span></div></div>`
-    : `<div class="trust bad">${ICON_WARN}<div><strong>Cuidado: hay datos que no cuadran</strong><span>No te fíes hasta revisarlo (detalle abajo).</span></div></div>`;
+    : `<div class="trust bad">${ICON_WARN}<div><strong>Cuidado: hay datos que no cuadran</strong><span>No te fíes de estas cifras hasta revisarlo${compacto ? ': el detalle está en la pestaña Resumen' : ' (detalle abajo)'}.</span></div></div>`;
   const checks = r.checks.map((c) =>
     `<div class="vcheck ${c.ok ? 'ok' : 'bad'}">${c.ok ? CK : CX}<span>${c.nombre}${c.detalle ? ` — <em>${c.detalle}</em>` : ''}</span></div>`
   ).join('');
@@ -425,7 +434,7 @@ function renderVerificacion() {
       No sé si tributan, así que cuenta${plural ? 'n' : ''} <strong>0 €</strong> de IRPF y el neto real puede estar inflado.
       <span class="mc">Clasifícalo${plural ? 's' : ''} en <strong>Editar datos</strong>: conceptos que tributan (banco) o que no tributan (cripto).</span></span></div>`;
   }
-  cont.innerHTML = stale + badge + ambar + `<div class="vchecks">${checks}</div>`;
+  cont.innerHTML = stale + badge + ambar + (compacto ? '' : `<div class="vchecks">${checks}</div>`);
 }
 
 // Línea bajo el hero: qué se llevaría de verdad si sacara ese dinero por transferencia.
@@ -970,6 +979,7 @@ function ctxDecisiones() {
   const hoy = hoyISO();
   const gastosFijos = getGastos();
   return {
+    beneficioAnual: beneficioAnualVivo(mv),
     datos: {
       ...datos,
       config: {
@@ -993,8 +1003,13 @@ function ctxDecisiones() {
 
 // ---------- Router ----------
 function renderVista(v) {
-  if (v === 'decisiones') renderDecisiones(ctxDecisiones());
-  else if (v === 'resumen') renderResumen();
+  if (v === 'decisiones') {
+    // Antes esto solo se pintaba desde renderResumen(), y la vista de arranque dejó de ser
+    // Resumen: al abrir la app no se veía nunca. Va aquí, no dentro de renderDecisiones(),
+    // porque decisiones.js y su vista son puros y no saben de dónde vienen los datos.
+    renderVerificacion('verificacion-dec', true);
+    renderDecisiones(ctxDecisiones());
+  } else if (v === 'resumen') renderResumen();
   else if (v === 'historico') renderHistorico();
   else if (v === 'retiros') renderRetiros();
   else if (v === 'midinero') renderMiDinero();
@@ -1033,7 +1048,7 @@ function renderVista(v) {
   } else if (v === 'residencia') {
     const mv = modeloVivo();
     renderResidencia({
-      beneficioAnual: beneficioAnualProyectado(mv.modelo),
+      beneficioAnual: beneficioAnualVivo(mv),
       opciones: getResidencia(),
       // El modelo del negocio viaja para poder traducir los umbrales a ventas al mes, que
       // es lo único de todo esto que él controla de verdad. Sin él la vista se calla esa
@@ -1047,26 +1062,27 @@ function renderVista(v) {
   postRender(v);
 }
 
-// El beneficio ANUAL con el que se compara vivir en cada sitio: su parte del beneficio del
-// negocio de lo que va de año, proyectada a doce meses.
+// EL beneficio ANUAL de la app. Uno solo, calculado en un sitio, y el mismo para todas las
+// pantallas que comparan contra un umbral: los hitos de "Y ahora qué", el bloque de países
+// de esa misma pestaña y la tabla entera de "Dónde vivir".
 //
-// Sale de `situacionFiscalDelAnio`, que es quien ya cuenta las ventas y los gastos reales
-// desde el 1 de enero. El tiempo transcurrido se cuenta con la fracción del mes en curso
-// (igual que hace ese módulo por dentro): con meses enteros, cada día 1 el divisor subía
-// de golpe mientras los ingresos del mes nuevo aún eran cero y la proyección se desplomaba.
+// Antes había dos. "Y ahora qué" usaba `resultadoMensual(modelo, ventasMedia).miParte * 12`
+// y "Dónde vivir" proyectaba el año en curso desde `situacionFiscalDelAnio`. Con los mismos
+// datos salían 12.962,86 € y 15.484,53 €: un 19,5 % de diferencia, y justo a los dos lados
+// del umbral de Paraguay (15.000). A un toque de distancia, la app contestaba dos cosas
+// opuestas a la misma pregunta: "te faltan 0,3 ventas al mes para que Paraguay te compense"
+// y "Paraguay es el país que más te deja".
 //
-// Ojo con la magnitud: `miParteYtd` es antes de cuota de autónomo y de impuestos (eso lo
-// resta cada escenario a su manera) y después de los gastos del NEGOCIO. La asesoría
-// personal no está descontada aquí; la pantalla lo dice.
-function beneficioAnualProyectado(modelo) {
-  const hoy = hoyISO();
-  const s = O.situacionFiscalDelAnio(datos, modelo, hoy);
-  const mes = Number(hoy.slice(5, 7));
-  const dia = Number(hoy.slice(8, 10));
-  const diasDelMes = new Date(Date.UTC(Number(hoy.slice(0, 4)), mes, 0)).getUTCDate();
-  const transcurrido = (mes - 1) + dia / diasDelMes;
-  if (!(transcurrido > 0) || !Number.isFinite(s.miParteYtd)) return 0;
-  return Math.max(0, (s.miParteYtd / transcurrido) * 12);
+// Manda la magnitud de "Y ahora qué" por dos razones: es la que sostiene toda la traducción
+// a ventas al mes de decisiones.js (los euros y las ventas tienen que decir lo mismo del
+// mismo umbral), y sale de los meses CERRADOS, así que no se mueve sola cada día 1.
+//
+// Ojo con lo que incluye: es su parte del beneficio del negocio, antes de cuota de autónomo
+// y de impuestos (eso lo resta cada escenario a su manera) y después de los gastos del
+// NEGOCIO. La asesoría personal no está descontada aquí; la pantalla lo dice.
+function beneficioAnualVivo(mv) {
+  const b = O.resultadoMensual(mv.modelo, mv.ventasMedia).miParte * 12;
+  return Number.isFinite(b) ? b : 0;
 }
 function cambiarVista(v) {
   vistaActiva = v;
@@ -1111,7 +1127,50 @@ function abrirModal() {
   pintarEstadoDatos();
   document.getElementById('modal').classList.remove('oculto');
 }
+// Las credenciales de la hoja se guardan con el mismo gesto que todo lo demás.
+//
+// Antes NO: setSync() solo se alcanzaba desde "Probar conexión" y "Sincronizar ahora", así
+// que quien las pegaba y pulsaba "Guardar" -o cerraba con la X- las perdía sin un solo
+// aviso. El modal se cerraba como si hubiera ido bien, y en cada arranque
+// sincronizarAlArrancar() salía por su return sin hacer una sola petición: Javier creía
+// tener la copia montada y sus datos seguían viviendo solo en el localStorage del iPhone.
+//
+// Devuelve false si lo escrito no vale, para que "Guardar" pueda no cerrar y decirlo.
+function guardarSyncDelModal() {
+  const url = document.getElementById('g-sync-url');
+  const clave = document.getElementById('g-sync-clave');
+  if (!url || !clave) return true;
+  const u = String(url.value).trim();
+  const k = String(clave.value).trim();
+
+  // Los dos campos vacíos son una orden legítima: desconectar.
+  if (!u && !k) {
+    const antes = getSync();
+    if (antes.url || antes.clave) setSync('', '');
+    pintarEstadoDatos();
+    return true;
+  }
+
+  const v = SYNC.validarCredenciales(u, k);
+  if (!v.ok) {
+    pintarMensaje('g-sync-msg', 'mal', v.errores.map(esc).join(' '));
+    pintarEstadoDatos();
+    return false;
+  }
+  setSync(u, k);
+  pintarEstadoDatos();
+  return true;
+}
+
 function cerrarModal() { document.getElementById('modal').classList.add('oculto'); }
+
+// Cerrar con la X pierde tan poco como pulsar Guardar: lo válido se persiste igual. Si lo
+// que hay escrito no vale, no se guarda nada (pero tampoco se le atrapa dentro del modal:
+// el mensaje se queda pintado para cuando vuelva).
+function cerrarModalGuardandoSync() {
+  guardarSyncDelModal();
+  cerrarModal();
+}
 function guardarModal() {
   const saldo = parseFloat(document.getElementById('g-saldo').value);
   if (!Number.isNaN(saldo)) localStorage.setItem(SALDO_KEY, JSON.stringify({ importe: saldo, fechaActualizacion: hoyISO() }));
@@ -1125,8 +1184,12 @@ function guardarModal() {
     conceptosBanco: leerConceptos('g-banco'),
     conceptosCripto: leerConceptos('g-cripto'),
   }));
+
+  // Si lo escrito en los campos de sincronización no vale, NO se cierra: el resto ya se ha
+  // guardado, pero cerrar aquí sería tirar esas credenciales en silencio otra vez.
+  const syncOk = guardarSyncDelModal();
   marcarCambio();
-  cerrarModal();
+  if (syncOk) cerrarModal();
   renderVista(vistaActiva);
 }
 function exportarJSON() {
@@ -1381,7 +1444,7 @@ function bind() {
     if (!document.hidden) cargarNegocio().then(() => renderVista(vistaActiva)).catch(() => {});
   });
   document.getElementById('btn-editar').addEventListener('click', abrirModal);
-  document.getElementById('modal-cerrar').addEventListener('click', cerrarModal);
+  document.getElementById('modal-cerrar').addEventListener('click', cerrarModalGuardandoSync);
   document.getElementById('g-guardar').addEventListener('click', guardarModal);
   document.getElementById('g-exportar').addEventListener('click', exportarJSON);
   document.getElementById('g-add-gasto').addEventListener('click', () => {
