@@ -450,6 +450,28 @@ export function irpfEspanaAnual(baseLiquidable, comunidad = 'madrid') {
   return detalleIrpfEspana(baseLiquidable, comunidad).cuota;
 }
 
+// LA ESCALA DE IRPF DE TODA LA APP: estatal + autonómica, sumadas tramo a tramo.
+//
+// Vivía privada dentro de decisiones.js, y por eso la unificación se quedó a medias:
+// objetivo.js mantenía su propia tabla aproximada (19/24/30/37/45/47) y ESA es la que
+// alimenta la pestaña "Hacienda", la reserva de impuestos, la simulación de la Renta y
+// "Mi capital". La app enseñaba las dos escalas a la vez y en la misma pantalla: "estás en
+// el tramo del 19 %" junto a "cambio de tramo de IRPF: del 18 % al 20,5 %".
+//
+// Los bordes son la unión ordenada de las dos escalas; el tipo de cada tramo, la suma de los
+// dos marginales en ese tramo. Escala autonómica vacía (Cataluña, Andalucía y Valencia van
+// así A PROPÓSITO: el informe no las publica) -> queda solo la estatal, y se avisa.
+export function escalaIrpfAgregada(comunidad = 'madrid') {
+  const auto = ESCALAS_AUTONOMICAS[claveComunidad(comunidad)] || [];
+  const tipoEn = (escala, x) => {
+    const t = escala.find((r) => x <= r.hasta);
+    return t ? t.tipo : 0;
+  };
+  return [...new Set([...ESCALA_ESTATAL, ...auto].map((t) => t.hasta))]
+    .sort((a, b) => a - b)
+    .map((hasta) => ({ hasta, tipo: tipoEn(ESCALA_ESTATAL, hasta) + tipoEn(auto, hasta) }));
+}
+
 // IRPF de la base del AHORRO (los dividendos de la SL). Escala propia, sin mínimo personal:
 // el mínimo ya se ha consumido contra la base general del sueldo.
 export function irpfAhorroAnual(baseAhorro) {
@@ -471,6 +493,11 @@ export function opcionesPorDefecto() {
     deduccionGenericaReta: DEDUCCION_GENERICA_RETA,
     dificilJustificacionPct: DIFICIL_JUSTIFICACION_PCT,
     dificilJustificacionTope: DIFICIL_JUSTIFICACION_TOPE,
+    // Su cuota de autónomo REAL al año, si se sabe. null = usar la del tramo del RETA, que
+    // es la foto de cuando se acabe la tarifa plana (ver SUPUESTOS['espana-autonomo']).
+    // Quien pinte "lo que tienes HOY" tiene que pasar la suya: si no, España sale con una
+    // cuota que hoy no paga y el ranking corona al país equivocado.
+    cuotaAutonomoAnual: null,
 
     // España, SL
     sueldoAdministrador: CONFIG_SL.sueldoAdministrador,
@@ -498,6 +525,15 @@ export function opcionesPorDefecto() {
   };
 }
 
+// Una cuota anual que puede NO saberse. null/undefined/''/basura -> el valor por defecto
+// (que es null: "usa la tabla del RETA"). Nunca convierte un hueco en un cero, porque un
+// cero aquí significaría "no paga cuota de autónomo" y eso es una cifra, no un hueco.
+function cuotaOpcional(v, porDefecto) {
+  if (v === null || v === undefined || v === '') return porDefecto;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : porDefecto;
+}
+
 // Limpia lo que llega de la vista: un campo vacío vuelve a su valor por defecto y los
 // porcentajes no se salen de 0..100. Nunca devuelve NaN.
 export function normalizarOpciones(opciones) {
@@ -509,6 +545,9 @@ export function normalizarOpciones(opciones) {
     deduccionGenericaReta: pct(x.deduccionGenericaReta, d.deduccionGenericaReta),
     dificilJustificacionPct: pct(x.dificilJustificacionPct, d.dificilJustificacionPct),
     dificilJustificacionTope: Math.max(0, num(x.dificilJustificacionTope, d.dificilJustificacionTope)),
+    // null, '' o basura = sin dato: se usa la cuota del tramo del RETA. Ojo con el null,
+    // que `Number(null)` vale 0 y colaría una cuota de autónomo de cero euros.
+    cuotaAutonomoAnual: cuotaOpcional(x.cuotaAutonomoAnual, d.cuotaAutonomoAnual),
 
     sueldoAdministrador: Math.max(0, num(x.sueldoAdministrador, d.sueldoAdministrador)),
     cuotaSocietaria: Math.max(0, num(x.cuotaSocietaria, d.cuotaSocietaria)),
@@ -548,7 +587,18 @@ export function netoEspanaAutonomo(beneficio, opciones) {
   const b = num(beneficio, 0);
 
   const tramoReta = tramoRetaDe(b, o.deduccionGenericaReta);
-  const cuotaReta = tramoReta.baseMinima * (TIPO_COTIZACION_RETA / 100) * 12;
+  const cuotaRetaTabla = tramoReta.baseMinima * (TIPO_COTIZACION_RETA / 100) * 12;
+
+  // LA CUOTA QUE DE VERDAD PAGA. Por defecto el comparador cobra la del tramo del RETA, que
+  // es la foto de cuando se le acabe la tarifa plana. Pero él paga 80 €/mes HOY, y las
+  // pantallas que dicen "lo que tienes hoy" tienen que compararse contra eso.
+  //
+  // Va DENTRO de la cadena y no como resta a posteriori porque la cuota del RETA es GASTO
+  // DEDUCIBLE: bajarla sube la base del IRPF. Restar la diferencia en bruto al final se
+  // saltaba ese efecto y daba un tercer número distinto (con sus cifras: -378,25 €/año en
+  // vez de -77,70 €/año). Aquí se recalcula la cadena entera y sale una sola respuesta.
+  const cuotaReta = o.cuotaAutonomoAnual === null ? cuotaRetaTabla : o.cuotaAutonomoAnual;
+  const tarifaPlanaAplicada = o.cuotaAutonomoAnual !== null && o.cuotaAutonomoAnual < cuotaRetaTabla;
 
   const rendimientoPrevio = b - cuotaReta;
   // El 5 % de una pérdida sería un número negativo que SUBIRÍA la base. Se corta en 0.
@@ -566,6 +616,9 @@ export function netoEspanaAutonomo(beneficio, opciones) {
     escenario: 'espana-autonomo',
     beneficio: b,
     cuotaReta,
+    // La de la tabla, siempre, para poder enseñar las dos y decir cuál se ha usado.
+    cuotaRetaTabla,
+    tarifaPlanaAplicada,
     tramoReta,
     rendimientoPrevio,
     dificilJustificacion,
@@ -574,7 +627,15 @@ export function netoEspanaAutonomo(beneficio, opciones) {
     irpfDetalle: detalle,
     neto,
     pctBolsillo: porcentajeBolsillo(neto, b),
-    avisos: [...detalle.avisos],
+    avisos: [
+      ...detalle.avisos,
+      ...(tarifaPlanaAplicada
+        ? [`Contado con TU cuota de autónomo real (${formatoEuros(cuotaReta)} al año), no con la `
+          + `del tramo del RETA (${formatoEuros(cuotaRetaTabla)}). El día que se acabe la tarifa `
+          + `plana, España te costará ${formatoEuros(cuotaRetaTabla - cuotaReta)} más al año y esta `
+          + 'comparación cambia sola.']
+        : []),
+    ],
   };
 }
 

@@ -102,6 +102,18 @@ function ventasTexto(n) {
   return String(Math.round(x * 10) / 10).replace('.', ',');
 }
 
+// Los textos de fiscal.js llevan las fechas en ISO ("Venció el 2026-07-20"). Ahí dentro son
+// un dato bien puesto -es un módulo, no una pantalla-, pero en mitad de una frase se leen
+// como un código y no como el día que son. Se pasan al castellano solo al pintarlas: es una
+// transformación de presentación, no toca fiscal.js y no cambia ninguna cifra.
+const MESES_LARGO = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+  'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+function fiscalTexto(v) {
+  return String(v ?? '').replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g,
+    (m, a, mes, d) => `${Number(d)} de ${MESES_LARGO[Number(mes) - 1]} de ${a}`);
+}
+
 // Euros cortos para chips y extremos de barra: "15.000 €", sin céntimos.
 function eurosCortos(n) {
   if (!Number.isFinite(Number(n))) return '—';
@@ -163,22 +175,68 @@ function prepararCtx(ctx) {
       ? Number(c.beneficioAnual)
       : miParteMes * 12,
     opciones: normalizarResidencia(c.residencia),
+    // Las alertas de Hacienda, YA calculadas por fiscal.js en app.js. Esta vista no las
+    // recalcula ni sabe de plazos: solo las pinta.
+    //
+    // Se cae la de "lo que tienes que tener guardado hoy" (`apartar`) a propósito: la lista
+    // de abajo ya tiene su propia alerta de reserva de impuestos, y las dos miden cosas
+    // parecidas con cifras distintas -una el IRPF devengado del año, la otra el 130 vencido
+    // con su recargo-. Dos números para la misma pregunta en la misma pantalla es la forma
+    // más rápida de que no se crea ninguno. El número grande vive en la pestaña Hacienda.
+    fiscales: (Array.isArray(c.alertasFiscales) ? c.alertasFiscales : [])
+      .filter((a) => a && a.id !== 'apartar'),
     f: typeof c.f === 'function' ? c.f : formatoEuros,
     card: typeof c.card === 'function' ? c.card : cardPorDefecto,
   };
+}
+
+// Lo vencido ante Hacienda manda sobre todo lo demás de esta pantalla: es lo único que
+// empeora solo, con fecha, mientras la app está cerrada.
+function fiscalesRojas(c) {
+  return c.fiscales.filter((a) => a.nivel === 'rojo');
+}
+
+// De todas las rojas, la que hay que decir en voz alta. NO es la primera de la lista: esa
+// viene ordenada por fecha límite, y el 1T, que sale a cero, se comía el titular mientras el
+// 2T con 651,01 € y su recargo corriendo quedaba enterrado tres líneas más abajo.
+function peorFiscal(lista) {
+  if (!lista.length) return null;
+  return lista
+    .map((a, i) => ({ a, i }))
+    .sort((x, y) => {
+      const d = (Number(y.a.importe) || 0) - (Number(x.a.importe) || 0);
+      return d !== 0 ? d : x.i - y.i;
+    })[0].a;
 }
 
 // ---------------------------------------------------------------------------
 // A) El semáforo: ¿dónde estoy ahora mismo?
 // ---------------------------------------------------------------------------
 
+// EL SEMÁFORO NO PUEDE SER MÁS OPTIMISTA QUE HACIENDA.
+//
+// decisiones.js mide el negocio y no sabe nada de plazos: con un modelo 130 vencido y todo
+// lo demás en orden pintaba "Está todo en orden" mientras corría un recargo con fecha. Así
+// que si hay algo vencido, el semáforo se pone rojo y la primera frase es esa, no la del mes.
+// El resto de la explicación se conserva tal cual: sigue siendo verdad, solo que va después.
 function pintarSemaforo(c) {
   const s = semaforo(c.ctx);
-  return `<div class="dec-semaforo ${esc(s.nivel)}" role="status">
+  const rojas = fiscalesRojas(c);
+  const nivel = rojas.length ? 'rojo' : s.nivel;
+  const peor = peorFiscal(rojas);
+  const titulo = rojas.length
+    ? (rojas.length === 1 ? 'Tienes algo vencido con Hacienda' : `Tienes ${rojas.length} cosas vencidas con Hacienda`)
+    : s.titulo;
+  const explicacion = rojas.length
+    ? fiscalTexto(`Lo más caro: ${peor.titulo}. ${peor.texto} ${s.explicacion}`)
+    : s.explicacion;
+
+  return `<div class="dec-semaforo ${esc(nivel)}" role="status">
     <span class="dec-semaforo-luz" aria-hidden="true"></span>
     <div class="dec-semaforo-txt">
-      <p class="dec-semaforo-tit">${esc(s.titulo)}</p>
-      <p class="dec-semaforo-exp">${esc(s.explicacion)}</p>
+      <p class="dec-semaforo-tit">${esc(titulo)}</p>
+      <p class="dec-semaforo-exp">${esc(explicacion)}</p>
+      ${rojas.length ? '<button type="button" class="btn btn-primary dec-ir" data-ir="fiscal">Ver qué tengo vencido</button>' : ''}
     </div>
   </div>`;
 }
@@ -190,19 +248,66 @@ function pintarSemaforo(c) {
 // El "no hay nada que hacer" de verdad, sin depender de comparar textos: es exactamente la
 // condición con la que queHacerHoy() se queda sin candidatas (ninguna alerta encendida y
 // ningún hito por cruzar).
-function nadaQueHacer(ctx) {
-  return alertas(ctx).every((a) => a.nivel === 'verde') && siguienteHito(ctx) === null;
+function nadaQueHacer(c) {
+  return alertas(c.ctx).every((a) => a.nivel === 'verde')
+    && siguienteHito(c.ctx) === null
+    && c.fiscales.every((a) => a.nivel === 'verde');
+}
+
+// Las acciones de Hacienda, con la forma que ya usa esta lista. Van DELANTE de las del
+// negocio: presentar un modelo vencido tiene fecha y las demás no.
+//
+// COMO MUCHO DOS, y elegidas, no las primeras. Volcarlas todas llenaba los tres huecos del
+// día con "presenta el 130 del 1T", "presenta el 303 del 1T" y "presenta el 349 del 1T":
+// tres frases casi idénticas, ninguna la más cara, y el negocio desaparecido de su propia
+// pantalla. Las que salen son:
+//   · el ROI, si está en duda, porque bloquea a los demás (sin NIF-IVA no hay 349 que valga);
+//   · y el vencimiento que más dinero mueve, diciendo cuántos más quedan detrás.
+function accionesFiscales(c) {
+  const abiertas = c.fiscales.filter((a) => a.nivel !== 'verde' && a.queHacer);
+  if (!abiertas.length) return [];
+
+  const roi = abiertas.find((a) => a.id === 'roi');
+  const vencidos = abiertas.filter((a) => a.id !== 'roi');
+  const peor = peorFiscal(vencidos);
+  const detras = vencidos.length - (peor ? 1 : 0);
+
+  const out = [];
+  if (roi) {
+    out.push({ accion: fiscalTexto(roi.queHacer), porque: fiscalTexto(`${roi.titulo}: ${roi.texto}`), urgencia: roi.urgencia || 'ya' });
+  }
+  if (peor) {
+    out.push({
+      accion: fiscalTexto(peor.queHacer),
+      porque: fiscalTexto(`${peor.titulo}: ${peor.texto}`)
+        + (detras > 0
+          ? ` Y ${detras === 1 ? 'queda otro modelo vencido' : `quedan otros ${detras} modelos vencidos`}: los tienes todos, con lo que cuesta cada uno, en la pestaña "Hacienda".`
+          : ''),
+      urgencia: peor.urgencia || 'ya',
+    });
+  }
+  return out;
 }
 
 function pintarHoy(c) {
-  if (nadaQueHacer(c.ctx)) {
+  if (nadaQueHacer(c)) {
     return `<div class="dec-nada">
       <p class="dec-nada-tit">Hoy no tienes que hacer nada.</p>
       <p class="dec-nada-sub">Sigue vendiendo.</p>
     </div>`;
   }
 
-  const lista = queHacerHoy(c.ctx).slice(0, 3);
+  // Tres en total, no tres más tres: si Hacienda ocupa los tres huecos es porque de verdad
+  // es lo único que importa hoy, y el resto sigue estando dos bloques más abajo.
+  const vistas = new Set();
+  const lista = [...accionesFiscales(c), ...queHacerHoy(c.ctx)]
+    .filter((x) => {
+      if (!x.accion || vistas.has(x.accion)) return false;
+      vistas.add(x.accion);
+      return true;
+    })
+    .slice(0, 3);
+
   if (!lista.length) {
     return `<div class="dec-nada">
       <p class="dec-nada-tit">Hoy no tienes que hacer nada.</p>
@@ -237,14 +342,40 @@ function pintarAlertas(c) {
     })
     .map((o) => o.a);
 
-  const tarjetas = lista.map((a) => `<div class="dec-alerta ${esc(a.nivel)}">
+  const tarjeta = (a) => `<div class="dec-alerta ${esc(a.nivel)}">
       <span class="dec-alerta-punto" aria-hidden="true"></span>
       <p class="dec-alerta-txt">${esc(a.texto)}</p>
       ${a.dato ? `<span class="dec-alerta-dato num">${esc(a.dato)}</span>` : ''}
-    </div>`).join('');
+    </div>`;
 
-  return `<div class="dec-alertas">${tarjetas}</div>
-    <p class="dec-pie">Salen siempre las seis, siempre en el mismo orden, aunque estén en verde. Una lista que cambia de tamaño cada día es una lista que da miedo mirar.</p>`;
+  const tarjetas = lista.map(tarjeta).join('');
+
+  // Hacienda va en su propio grupo y va PRIMERO. No se mezcla con las seis del negocio
+  // porque no se compara con ellas: éstas tienen fecha y las otras no, y una lista ordenada
+  // solo por color pondría "llevas 4 días sin vender" por encima de un recargo que corre.
+  //
+  // Y aquí, a diferencia de las del negocio, va el TÍTULO delante: seis alertas que empiezan
+  // por "Venció el ..." son seis líneas indistinguibles, y lo que hace falta saber es de qué
+  // modelo y de qué trimestre habla cada una.
+  const tarjetaFiscal = (a) => `<div class="dec-alerta ${esc(a.nivel)}">
+      <span class="dec-alerta-punto" aria-hidden="true"></span>
+      <div class="dec-alerta-txt">
+        <p class="dec-alerta-tit">${esc(a.titulo)}</p>
+        <p>${esc(fiscalTexto(a.texto))}</p>
+      </div>
+      ${a.dato ? `<span class="dec-alerta-dato num">${esc(fiscalTexto(a.dato))}</span>` : ''}
+    </div>`;
+
+  const fis = c.fiscales.length
+    ? `<p class="dec-alertas-sep">Hacienda</p>
+      <div class="dec-alertas">${c.fiscales.map(tarjetaFiscal).join('')}</div>
+      <p class="dec-pie">Salen de la pestaña "Hacienda", donde está el detalle de cada una: cuánto cuesta hoy, cuándo sube y cómo se presenta.
+        <button type="button" class="btn btn-ghost dec-ir" data-ir="fiscal">Ver el detalle en "Hacienda"</button></p>
+      <p class="dec-alertas-sep">El negocio</p>`
+    : '';
+
+  return `${fis}<div class="dec-alertas">${tarjetas}</div>
+    <p class="dec-pie">Del negocio salen siempre las seis, siempre en el mismo orden, aunque estén en verde. Una lista que cambia de tamaño cada día es una lista que da miedo mirar.</p>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -561,8 +692,14 @@ function pintarPaises(c) {
     const gana = b > 0 && ganador && x.escenario === ganador.escenario;
     const bloqueado = x.escenario === 'bali' && !x.detalle.califica;
     const diferencia = espana ? x.neto - espana.neto : 0;
+    // La fila de España dice con QUÉ cuota está contada. "lo que tienes hoy" a secas era una
+    // afirmación sobre HOY sostenida con una cuota de autónomo que hoy no paga: el comparador
+    // cobra la del tramo del RETA y él tiene tarifa plana. Ahora se cuenta con la suya, y se
+    // dice, porque es un dato que CADUCA.
     const nota = x.escenario === 'espana-autonomo'
-      ? 'lo que tienes hoy'
+      ? (x.detalle.tarifaPlanaAplicada
+        ? `lo que tienes hoy, con tu tarifa plana de ${esc(euros(f, x.detalle.cuotaReta / 12))} al mes`
+        : 'lo que tienes hoy')
       : `${diferencia >= 0 ? '+' : ''}${esc(euros(f, diferencia))} al año frente a España`;
     return `<div class="dec-pais${gana ? ' gana' : ''}${bloqueado ? ' bloqueado' : ''}">
       <div class="dec-pais-top">
@@ -597,6 +734,27 @@ function pintarPaises(c) {
     ? `<p class="dec-paises-aviso">Bali está en gris a propósito: el visado E33G exige acreditar ${eurosCortos(UMBRALES_BALI.legal)} al año de ingresos y hoy facturas ${eurosCortos(b)}. Y lo que hay que acreditar con extractos es lo que TE ENTRA a ti, no lo que factura el negocio de tu socio. Por debajo de ahí Bali no es una opción cara, es que no existe.</p>`
     : '';
 
+  // El día que se acabe la tarifa plana esta tabla cambia sola, y puede cambiar el GANADOR.
+  // Decirlo aquí y no en la letra pequeña: es la única variable de esta pantalla que se mueve
+  // sin que él haga nada, y tiene fecha.
+  let avisoTarifaPlana = '';
+  if (espana && espana.detalle.tarifaPlanaAplicada && b > 0) {
+    const sinTP = ordenPaises(b, { ...o, cuotaAutonomoAnual: null }, false);
+    const espanaSinTP = sinTP.find((x) => x.escenario === 'espana-autonomo');
+    const ganadorSinTP = ordenPaises(b, { ...o, cuotaAutonomoAnual: null })[0];
+    if (espanaSinTP && ganadorSinTP) {
+      const cuestaMas = espana.neto - espanaSinTP.neto;
+      const cambiaGanador = ganador && ganadorSinTP.escenario !== ganador.escenario;
+      avisoTarifaPlana = `<p class="dec-paises-aviso">Esto está contado con tu tarifa plana de `
+        + `${esc(euros(f, espana.detalle.cuotaReta / 12))} al mes. Cuando se te acabe, España te `
+        + `costará ${esc(euros(f, cuestaMas))} más al año`
+        + (cambiaGanador
+          ? ` y el que más te deja pasa a ser <strong>${esc(NOMBRE_PAIS[ganadorSinTP.escenario])}</strong>. Es el dato de esta pantalla que caduca: apunta la fecha de tu alta en el RETA.`
+          : `, pero ${esc(NOMBRE_PAIS[ganadorSinTP.escenario])} seguiría siendo el que más te deja.`)
+        + '</p>';
+    }
+  }
+
   const cambio = cambioDeGanador(b, o);
   let siguiente;
   if (!cambio) {
@@ -612,6 +770,7 @@ function pintarPaises(c) {
   return `<p class="dec-paises-tit">${titular}</p>
     <div class="dec-paises">${filas}</div>
     ${avisoBali}
+    ${avisoTarifaPlana}
     ${siguiente}
     <p class="dec-pie">Solo impuestos y estructura: no incluye lo que cuesta vivir en cada sitio, que puede darle la vuelta a todo. Y se compara con lo que TÚ facturas, no con el beneficio del negocio: mudarte cambia tu tributación, no la del negocio de tu socio. Es la misma cifra aquí, en los hitos de arriba y en "Dónde vivir": una sola para toda la app, para que no haya dos respuestas a la misma pregunta.
       <button type="button" class="btn btn-ghost dec-ir" data-ir="residencia">Ver el detalle en "Dónde vivir"</button></p>`;

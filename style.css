@@ -1495,3 +1495,773 @@ td.col-real { font-weight: 600; }
   margin: 12px 0 0; padding: 12px 14px;
   background: var(--amber-dim); border-left: 2px solid var(--amber); border-radius: 8px;
 }
+
+/* ============================================================
+   HACIENDA
+   ============================================================
+   La única pantalla de la app con fechas que vencen solas. Toda la jerarquía visual dice lo
+   mismo que el orden de los bloques: primero lo vencido (rojo, cifra enorme, botón), después
+   el dinero que hay que tener guardado, y solo al final la teoría, plegada.
+
+   Dos decisiones que no son de estilo:
+   · El verde se usa MUY poco. Aquí verde significa "presentado" o "estás al día", y nada más.
+   · Los importes y las fechas van en monospace tabular. Un recargo que baila de ancho al
+     repintarse se lee como un número que cambia, y aquí ninguno cambia solo. */
+
+/* ---------- La cabecera de estado ---------- */
+.fis-cabecera {
+  border: 1px solid var(--border2); border-radius: 18px;
+  background: var(--surface); padding: 22px 24px; margin-bottom: 18px;
+}
+.fis-cabecera.rojo {
+  border-color: rgba(255, 92, 92, .5);
+  background: linear-gradient(180deg, var(--red-dim), transparent 70%), var(--surface);
+}
+.fis-cabecera.ambar {
+  border-color: rgba(245, 166, 35, .45);
+  background: linear-gradient(180deg, var(--amber-dim), transparent 70%), var(--surface);
+}
+.fis-cabecera.verde {
+  border-color: rgba(0, 200, 150, .45);
+  background: linear-gradient(180deg, var(--green-dim), transparent 70%), var(--surface);
+}
+.fis-cab-tit {
+  display: flex; align-items: center; gap: 11px;
+  font-size: clamp(18px, 3vw, 25px); font-weight: 800; letter-spacing: -.025em; line-height: 1.2;
+}
+.fis-cab-tit svg { width: 21px; height: 21px; flex-shrink: 0; }
+.fis-cabecera.rojo .fis-cab-tit svg { color: var(--red); }
+.fis-cabecera.ambar .fis-cab-tit svg { color: var(--amber); }
+.fis-cabecera.verde .fis-cab-tit svg { color: var(--green); }
+.fis-cab-sub { margin-top: 12px; font-size: 14px; color: var(--muted); line-height: 1.6; max-width: 70ch; }
+.fis-cab-sub strong { color: var(--text); }
+
+/* ---------- La tarjeta de un vencimiento vencido ---------- */
+.fis-vencido {
+  border: 1px solid rgba(255, 92, 92, .4); border-radius: 16px;
+  background: var(--surface); padding: 20px 22px; margin-bottom: 14px;
+}
+.fis-vencido.ambar { border-color: rgba(245, 166, 35, .4); }
+/* Ya presentado: se apaga. Sigue estando, porque es su registro, pero deja de gritar. */
+.fis-vencido.hecho { border-color: var(--border); opacity: .72; }
+.fis-vencido-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fis-modelo { font-family: var(--fm); font-size: 15px; font-weight: 500; letter-spacing: -.01em; }
+.fis-periodo { font-size: 13px; color: var(--muted); }
+.fis-vencido-sub { margin-top: 8px; font-size: 13px; color: var(--muted); line-height: 1.55; }
+
+/* La cifra grande: lo que cuesta hoy. */
+.fis-big { margin: 18px 0 4px; }
+.fis-big span {
+  display: block; font-family: var(--fm); font-variant-numeric: tabular-nums;
+  font-size: clamp(30px, 7vw, 46px); font-weight: 500; line-height: 1.05;
+  letter-spacing: -.03em; color: var(--red);
+}
+.fis-big.verde span { color: var(--green); }
+.fis-big.rojo span { color: var(--red); }
+.fis-big.sin-dato span { color: var(--amber); }
+.fis-big small {
+  display: block; margin-top: 9px; font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .08em; line-height: 1.5;
+}
+
+/* Cuándo sube el recargo. Es un salto con fecha, no una gotera: el texto lo dice y el
+   ámbar lo acompaña, para no pintar de rojo algo que todavía no ha pasado. */
+.fis-salto {
+  margin-top: 16px; padding: 12px 14px;
+  background: var(--amber-dim); border-left: 2px solid var(--amber); border-radius: 8px;
+  font-size: 13px; line-height: 1.6; max-width: 72ch;
+}
+.fis-salto strong { color: var(--amber); }
+.fis-nota { margin-top: 12px; font-size: 12.5px; color: var(--muted); line-height: 1.6; max-width: 72ch; }
+.fis-nota strong { color: var(--green); }
+.fis-porque { margin-top: 14px; font-size: 13.5px; color: var(--muted); line-height: 1.65; max-width: 72ch; }
+.fis-porque strong { color: var(--text); font-family: var(--fm); }
+.fis-quehacer { margin-top: 14px; font-size: 14px; font-weight: 600; line-height: 1.6; max-width: 72ch; }
+
+.fis-acciones { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+.fis-enlace {
+  font-size: 13px; font-weight: 600; color: var(--blue); text-decoration: none;
+  border-bottom: 1px solid rgba(77, 166, 255, .35); padding-bottom: 1px;
+}
+.fis-enlace:hover { border-bottom-color: var(--blue); }
+
+/* ---------- La letra pequeña, siempre plegada ---------- */
+.fis-det { margin-top: 14px; }
+.fis-det > summary {
+  cursor: pointer; list-style: none; font-size: 12px; color: var(--muted);
+  padding: 7px 0; user-select: none;
+}
+.fis-det > summary::-webkit-details-marker { display: none; }
+.fis-det > summary::before { content: '▸ '; color: var(--dim); }
+.fis-det[open] > summary::before { content: '▾ '; }
+.fis-det > summary:hover { color: var(--text); }
+.fis-avisos { margin: 6px 0 0; padding-left: 18px; }
+.fis-avisos li { font-size: 12.5px; color: var(--muted); line-height: 1.6; margin-bottom: 8px; max-width: 74ch; }
+.fis-hechos > summary { color: var(--green); }
+
+.fis-pie { margin-top: 14px; font-size: 12px; color: var(--muted); line-height: 1.6; max-width: 78ch; }
+.fis-intro { margin-bottom: 16px; font-size: 13.5px; color: var(--muted); line-height: 1.65; max-width: 76ch; }
+
+/* ---------- El enlace con la reserva de Mi patrimonio ---------- */
+.fis-reserva {
+  margin: 18px 0; padding: 16px 18px; border-radius: 14px;
+  border: 1px solid var(--border); background: var(--surface);
+}
+.fis-reserva.rojo { border-color: rgba(255, 92, 92, .45); background: var(--red-dim); }
+.fis-reserva.verde { border-color: rgba(0, 200, 150, .4); background: var(--green-dim); }
+.fis-reserva-tit { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 700; }
+.fis-reserva-tit svg { width: 17px; height: 17px; flex-shrink: 0; }
+.fis-reserva.rojo .fis-reserva-tit svg { color: var(--red); }
+.fis-reserva.verde .fis-reserva-tit svg { color: var(--green); }
+.fis-reserva-txt { margin-top: 10px; font-size: 13.5px; line-height: 1.65; max-width: 72ch; }
+.fis-reserva-txt strong.num { font-family: var(--fm); }
+.fis-reserva .btn { margin-top: 14px; }
+
+.fis-tabla { margin-top: 18px; }
+.fis-tabla tr.rojo td { background: var(--red-dim); }
+.fis-tabla tr.ambar td { background: var(--amber-dim); }
+
+/* ---------- La línea de tiempo del año ---------- */
+.fis-camino { list-style: none; padding: 0 0 0 34px; margin: 0; position: relative; }
+.fis-camino::before {
+  content: ''; position: absolute; left: 13px; top: 8px; bottom: 8px;
+  width: 2px; background: var(--border2);
+}
+.fis-paso { position: relative; margin-bottom: 12px; }
+.fis-punto {
+  position: absolute; left: -34px; top: 13px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--surface2); border: 2px solid var(--border2);
+  display: flex; align-items: center; justify-content: center;
+}
+.fis-punto svg { width: 11px; height: 11px; }
+.fis-punto.hecho { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+.fis-punto.vencido { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+.fis-punto.ahora { background: var(--amber); border-color: var(--amber); box-shadow: 0 0 12px rgba(245, 166, 35, .5); }
+.fis-paso-cuerpo {
+  border: 1px solid var(--border); border-radius: 13px;
+  background: var(--surface); padding: 13px 15px;
+}
+.fis-paso.vencido .fis-paso-cuerpo { border-color: rgba(255, 92, 92, .4); background: var(--red-dim); }
+.fis-paso.proximo .fis-paso-cuerpo { border-color: rgba(245, 166, 35, .45); background: var(--amber-dim); }
+/* Lo que ya está hecho y lo que todavía queda lejos se apagan: el ojo tiene que caer en el
+   rojo y en el destacado, no repartirse entre quince filas iguales. */
+.fis-paso.hecho .fis-paso-cuerpo { opacity: .6; }
+.fis-paso.futuro .fis-paso-cuerpo { opacity: .78; }
+.fis-paso-cab { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.fis-paso-fecha {
+  flex: 0 0 auto; font-size: 12px; color: var(--muted);
+  background: var(--surface2); border-radius: 6px; padding: 3px 8px;
+}
+.fis-paso-imp { margin-top: 9px; font-size: 14px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.fis-paso-imp .num { font-size: 16px; }
+.fis-paso-imp .mc { font-size: 11.5px; }
+.fis-sin { font-size: 13px; color: var(--muted); font-style: italic; }
+.fis-paso-si { margin-top: 8px; font-size: 12px; color: var(--muted); line-height: 1.6; max-width: 74ch; }
+.fis-importe { display: inline-flex; flex-direction: column; gap: 5px; margin-top: 10px; font-size: 11px; color: var(--muted); }
+.fis-importe input {
+  font-family: var(--fm); font-variant-numeric: tabular-nums; text-align: right;
+  font-size: 14px; padding: 8px 11px; width: 140px;
+  border: 1px solid var(--border2); border-radius: 9px;
+  background: var(--surface2); color: var(--text);
+}
+
+/* ---------- La ficha de cada modelo ---------- */
+.fis-ficha {
+  border: 1px solid var(--border); border-radius: 13px;
+  background: var(--surface); margin-bottom: 10px;
+}
+.fis-ficha-cab {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 14px 16px; cursor: pointer; list-style: none; user-select: none;
+}
+.fis-ficha-cab::-webkit-details-marker { display: none; }
+.fis-ficha-tit { font-size: 14px; font-weight: 600; flex: 1 1 auto; min-width: 0; }
+.fis-ficha[open] .fis-ficha-cab { border-bottom: 1px solid var(--border); }
+.fis-ficha-cuerpo { padding: 14px 16px 16px; }
+.fis-l { font-size: 10.5px; text-transform: uppercase; letter-spacing: .11em; color: var(--muted); margin: 14px 0 7px; }
+.fis-l:first-child { margin-top: 0; }
+.fis-txt { font-size: 13.5px; line-height: 1.65; max-width: 74ch; }
+/* La fuente de cada dato. Se lee poco, pero tiene que LEERSE: en var(--dim) sobre el fondo
+   oscuro no llegaba al contraste mínimo y era decoración, no una cita. */
+.fis-fuente { margin-top: 14px; font-size: 11px; color: var(--muted); opacity: .8; line-height: 1.5; }
+
+/* ---------- Las preguntas para la asesoría ---------- */
+.fis-preg {
+  border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); padding: 16px 18px; margin-bottom: 12px;
+}
+.fis-preg-cab { display: flex; align-items: flex-start; gap: 13px; }
+.fis-preg-n {
+  flex: 0 0 26px; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--surface2); color: var(--muted); font-size: 12px;
+  display: flex; align-items: center; justify-content: center; margin-top: 1px;
+}
+.fis-preg-cuerpo { min-width: 0; }
+.fis-preg-tit { font-size: 15px; font-weight: 700; line-height: 1.4; letter-spacing: -.01em; }
+.fis-preg-para { margin-top: 7px; font-size: 12.5px; color: var(--muted); line-height: 1.6; max-width: 74ch; }
+/* El texto entero: monospace y con el fondo de un bloque de código, porque es literalmente
+   algo que se copia y se pega sin tocar una coma. */
+.fis-preg-txt {
+  margin-top: 8px; padding: 14px 16px;
+  background: var(--surface2); border-radius: 10px; border: 1px solid var(--border);
+  font-family: var(--fm); font-size: 12.5px; line-height: 1.75;
+  white-space: pre-wrap; max-width: 88ch;
+}
+.fis-copiar { display: inline-flex; align-items: center; gap: 7px; }
+.fis-copiar svg { width: 14px; height: 14px; }
+/* El verde aparece SOLO cuando ya está copiada. Nueve botones verdes seguidos y ninguna
+   pregunta enviada era el color diciendo lo contrario que los datos. */
+.fis-copiar.fis-copiada { background: var(--green); color: #062018; border-color: transparent; }
+
+/* ---------- La Renta: el desglose, los campos y los pasos hasta junio ---------- */
+/* La tabla se lee como una cuenta, no como una lista: lo que resta va en rojo apagado y con su
+   signo, y las cuatro líneas de subtotal (rendimiento neto, base, cuota líquida, resultado)
+   pesan más. Sin eso son quince filas iguales y no se sigue ninguna. */
+.fis-renta-tabla td.neg { color: var(--red); }
+.fis-renta-tabla tr.sub td { font-weight: 600; background: var(--surface2); }
+.fis-renta-tabla tr.fin td { font-weight: 700; border-top: 2px solid var(--border2); }
+.fis-renta-tabla tr.fin td.num { font-size: 15px; }
+.fis-renta-art { font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+.fis-renta-campos { margin-top: 18px; }
+.fis-renta-campo { margin-top: 16px; }
+.fis-renta-campo .fis-importe input { width: 170px; }
+.fis-renta-campo .mc { display: block; margin-top: 7px; max-width: 72ch; line-height: 1.6; }
+
+/* El texto de una pregunta que solo existe para que el botón de copiar tenga de dónde leer.
+   No se oculta con display:none: el navegador no da textContent de lo que no renderiza en
+   algunos motores viejos, y el botón se quedaría copiando una cadena vacía sin decir nada. */
+.fis-oculto {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+
+.fis-renta-pasos { list-style: none; display: grid; gap: 10px; padding: 0; margin: 0; }
+.fis-renta-paso {
+  border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); padding: 14px 16px;
+}
+.fis-renta-paso.hecho { border-color: rgba(0, 200, 150, .3); opacity: .7; }
+.fis-renta-paso.pendiente { border-color: rgba(245, 166, 35, .4); }
+.fis-renta-paso-cab { display: flex; align-items: center; gap: 11px; flex-wrap: wrap; }
+.fis-renta-n {
+  flex: 0 0 26px; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--surface2); color: var(--muted); font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.fis-renta-paso.hecho .fis-renta-n { background: var(--green-dim); color: var(--green); }
+.fis-renta-tit { font-size: 14.5px; font-weight: 700; line-height: 1.45; flex: 1 1 auto; min-width: 0; }
+
+/* ---------- El checklist ---------- */
+.fis-progreso { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.fis-progreso-track { flex: 1 1 auto; height: 6px; border-radius: 3px; background: var(--surface2); overflow: hidden; }
+.fis-progreso-lleno { height: 100%; background: var(--green); border-radius: 3px; transition: width .4s var(--ease); }
+.fis-progreso-txt { flex: 0 0 auto; font-size: 12px; color: var(--muted); }
+
+.fis-checklist { list-style: none; display: grid; gap: 10px; padding: 0; margin: 0; }
+.fis-check {
+  border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); padding: 14px 16px;
+}
+.fis-check.hecho { border-color: rgba(0, 200, 150, .3); opacity: .68; }
+.fis-check-cab { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; }
+.fis-check-cab input[type="checkbox"] {
+  flex: 0 0 auto; width: 20px; height: 20px; margin-top: 1px;
+  accent-color: var(--green); cursor: pointer;
+}
+.fis-check-tit { font-size: 14.5px; font-weight: 600; line-height: 1.45; }
+.fis-check.hecho .fis-check-tit { text-decoration: line-through; text-decoration-color: var(--dim); }
+.fis-check-cuerpo { margin: 12px 0 0 32px; }
+.fis-check.hecho .fis-check-cuerpo { display: none; }
+
+/* ---------- El grupo de Hacienda dentro de "Y ahora qué" ---------- */
+/* Las alertas fiscales no se mezclan con las seis del negocio: no se comparan entre sí.
+   Éstas tienen fecha; las otras, no. */
+.dec-alertas-sep {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em;
+  color: var(--muted); margin: 0 0 10px;
+}
+.dec-alertas + .dec-pie + .dec-alertas-sep,
+.dec-pie + .dec-alertas-sep { margin-top: 20px; }
+.dec-semaforo .dec-ir { margin-top: 16px; }
+
+@media (max-width: 640px) {
+  .fis-cabecera { padding: 18px 16px; border-radius: 16px; }
+  .fis-vencido { padding: 16px 15px; }
+  .fis-reserva { padding: 14px 15px; }
+  .fis-reserva .btn { width: 100%; }
+  .fis-acciones .btn { width: 100%; }
+  .fis-acciones { gap: 12px; }
+
+  /* La línea de tiempo, más estrecha: en 390 px cada píxel de sangrado se nota. */
+  .fis-camino { padding-left: 26px; }
+  .fis-camino::before { left: 9px; }
+  .fis-punto { left: -26px; top: 11px; width: 18px; height: 18px; }
+  .fis-punto svg { width: 10px; height: 10px; }
+  .fis-paso-cuerpo { padding: 12px 13px; }
+  .fis-importe input { width: 100%; }
+  .fis-importe { display: flex; width: 100%; }
+
+  .fis-preg { padding: 14px 15px; }
+  .fis-preg-txt { font-size: 11.5px; padding: 12px 13px; }
+  .fis-copiar { width: 100%; justify-content: center; }
+  .fis-check-cuerpo { margin-left: 0; }
+}
+
+/* El título de una alerta fiscal. Sin él, seis líneas que empiezan por "Venció el…" son seis
+   líneas idénticas: lo primero que hay que saber es de qué modelo y de qué trimestre habla. */
+.dec-alerta-tit { font-size: 13px; font-weight: 700; letter-spacing: -.01em; margin-bottom: 4px; }
+.dec-alerta-txt p { font-size: 13.5px; line-height: 1.5; }
+
+/* Aquí dentro hay URLs largas de verdad (el validador VIES, Importass) metidas en mitad de
+   una frase. Sin esto, en un iPhone de 390 px esa cadena no parte por ningún sitio, estira la
+   tarjeta entera y saca la PÁGINA de sitio: se leía media línea de cada párrafo y había que
+   arrastrar la pantalla a los lados para acabar la frase. `break-word` solo parte lo que no
+   cabe de ninguna manera; el resto del texto sigue partiendo por espacios, como siempre. */
+#v-fiscal { overflow-wrap: break-word; }
+
+/* ============================================================
+   LA BARRA DE PESTAÑAS, EN MÓVIL
+   ============================================================
+   Son DOCE. En una sola fila, llegar a la última en un iPhone de 390 px son tres
+   pantallazos de arrastre, y lo que no se alcanza con el pulgar no existe. Así que en móvil
+   la barra pasa a dos filas con scroll horizontal: la mitad de recorrido, todas alcanzables,
+   y ningún menú oculto donde esconder media app.
+
+   OJO AL 6: es `ceil(12 / 2)`, seis columnas para que las filas se llenen de izquierda a
+   derecha (primero la fila de arriba, después la de abajo) y no en zigzag, que es lo que
+   pasa con grid-auto-flow: column. Si algún día se añade o se quita una pestaña, este número
+   se toca a mano; no hay forma de calcularlo en CSS dentro de un contenedor que desborda. */
+@media (max-width: 640px) {
+  .tabs {
+    display: grid;
+    grid-auto-flow: row;
+    grid-template-columns: repeat(6, max-content);
+    gap: 6px 4px;
+    width: max-content;
+  }
+  /* Área de toque cómoda: 40 px de alto es el mínimo con el que no se falla el dedo. */
+  .tab { padding: 10px 13px; font-size: 12.5px; min-height: 40px; }
+  .tabs-wrap {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+    scrollbar-width: none; -ms-overflow-style: none;
+  }
+  .tabs-wrap::-webkit-scrollbar { display: none; }
+}
+
+/* ============================================================
+   MI CAPITAL
+   ============================================================
+   La jerarquía dice lo mismo que el orden de los bloques: lo libre de verdad primero y en
+   grande, el colchón después, y solo entonces la simulación. Dos decisiones que no son de
+   estilo:
+   · La cifra grande se pinta EN ROJO cuando es negativa, y con la palabra "faltan" delante.
+     Un menos pequeño delante de un número verde no se lee.
+   · El objetivo de los seis meses va MARCADO dentro de la barra, no escrito al lado: la
+     pregunta es "llego o no llego" y eso se contesta de un vistazo o no se contesta. */
+
+.cap-hero, .cap-caja {
+  border: 1px solid var(--border2); border-radius: 20px;
+  background: var(--surface); padding: 26px 28px; margin-bottom: 20px;
+}
+.cap-hero.verde, .cap-caja.verde {
+  border-color: rgba(0, 200, 150, .45);
+  background: linear-gradient(180deg, var(--green-dim), transparent 70%), var(--surface);
+}
+.cap-hero.ambar, .cap-caja.ambar {
+  border-color: rgba(245, 166, 35, .45);
+  background: linear-gradient(180deg, var(--amber-dim), transparent 70%), var(--surface);
+}
+.cap-hero.rojo, .cap-caja.rojo {
+  border-color: rgba(255, 92, 92, .5);
+  background: linear-gradient(180deg, var(--red-dim), transparent 70%), var(--surface);
+}
+.cap-eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+
+.cap-big { margin-top: 14px; }
+.cap-big span {
+  display: block; font-family: var(--fm); font-variant-numeric: tabular-nums;
+  font-size: clamp(34px, 8vw, 56px); font-weight: 500; line-height: 1.05;
+  letter-spacing: -.03em; color: var(--green);
+}
+.cap-big.rojo span { color: var(--red); }
+.cap-big.ambar span { color: var(--amber); }
+.cap-big.verde span { color: var(--green); }
+.cap-big small {
+  display: block; margin-top: 9px; font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .08em; line-height: 1.5;
+}
+.cap-hero-linea { margin-top: 18px; font-size: 14px; line-height: 1.65; color: var(--muted); max-width: 70ch; }
+.cap-hero-linea strong { color: var(--text); }
+
+.cap-l { font-size: 10.5px; text-transform: uppercase; letter-spacing: .11em; color: var(--muted); margin: 22px 0 10px; }
+.cap-intro { font-size: 13.5px; color: var(--muted); line-height: 1.65; max-width: 74ch; margin-bottom: 16px; }
+.cap-pie { margin-top: 16px; font-size: 12px; color: var(--dim); line-height: 1.6; max-width: 78ch; }
+
+/* ---------- El desglose de lo comprometido ---------- */
+.cap-desglose { list-style: none; display: grid; gap: 10px; padding: 0; margin: 0; }
+.cap-linea {
+  border: 1px solid var(--border); border-radius: 13px;
+  background: var(--surface); padding: 14px 16px;
+}
+.cap-linea-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.cap-linea-cpt { font-size: 14px; font-weight: 600; min-width: 0; }
+.cap-linea-eur { flex: 0 0 auto; font-family: var(--fm); font-variant-numeric: tabular-nums; font-size: 15px; color: var(--amber); }
+.cap-linea-motivo { margin-top: 8px; font-size: 12.5px; color: var(--muted); line-height: 1.6; max-width: 74ch; }
+
+/* ---------- La barra del colchón ---------- */
+.cap-barra { margin-top: 24px; }
+.cap-barra-track {
+  position: relative; height: 14px; border-radius: 99px;
+  background: var(--surface2); border: 1px solid var(--border);
+}
+.cap-barra-lleno {
+  height: 100%; border-radius: 99px; min-width: 2px;
+  background: linear-gradient(90deg, rgba(0, 200, 150, .45), var(--green));
+  transition: width .6s var(--ease);
+}
+.cap-barra-lleno.corto { background: linear-gradient(90deg, rgba(245, 166, 35, .4), var(--amber)); }
+/* La marca del objetivo: una raya vertical dentro de la barra. Sobresale arriba y abajo para
+   que se vea también cuando el relleno ya la ha pasado. */
+.cap-barra-marca {
+  position: absolute; top: -5px; bottom: -5px; width: 2px;
+  background: var(--text); opacity: .75; border-radius: 2px;
+}
+.cap-barra-pies {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; margin-top: 12px; font-size: 11px; color: var(--muted);
+}
+.cap-barra-pies .der { text-align: right; }
+.cap-barra-obj { color: var(--text); }
+.cap-barra-nota { margin-top: 10px; font-size: 12px; color: var(--amber); line-height: 1.5; }
+.cap-grid { margin-top: 4px; }
+
+/* ---------- El simulador ---------- */
+.cap-campo { display: flex; flex-direction: column; gap: 7px; }
+.cap-campo label { font-size: 12px; color: var(--muted); }
+.cap-campo-fila { display: flex; align-items: center; gap: 9px; }
+.cap-campo-fila input {
+  font-family: var(--fm); font-variant-numeric: tabular-nums;
+  /* 16px, no menos: por debajo de eso iOS hace zoom al enfocar y descoloca la pantalla. */
+  font-size: 18px; padding: 11px 14px; width: 190px; max-width: 100%;
+  border: 1px solid var(--border2); border-radius: 11px;
+  background: var(--surface2); color: var(--text);
+}
+.cap-campo-eur { font-size: 15px; color: var(--muted); }
+.cap-campos { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 16px; }
+.cap-campos .cap-campo-fila input { width: 120px; font-size: 16px; }
+
+.cap-atajos { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0 20px; }
+.cap-atajo { font-size: 12px; }
+
+.cap-veredicto {
+  display: flex; align-items: flex-start; gap: 14px;
+  border: 1px solid var(--border2); border-radius: 16px;
+  background: var(--surface); padding: 18px 20px;
+}
+.cap-veredicto.verde { border-color: rgba(0, 200, 150, .45); background: linear-gradient(180deg, var(--green-dim), transparent 75%), var(--surface); }
+.cap-veredicto.ambar { border-color: rgba(245, 166, 35, .45); background: linear-gradient(180deg, var(--amber-dim), transparent 75%), var(--surface); }
+.cap-veredicto.rojo { border-color: rgba(255, 92, 92, .5); background: linear-gradient(180deg, var(--red-dim), transparent 75%), var(--surface); }
+.cap-veredicto-luz { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; background: var(--dim); }
+.cap-veredicto.verde .cap-veredicto-luz { background: var(--green); box-shadow: 0 0 12px var(--green); }
+.cap-veredicto.ambar .cap-veredicto-luz { background: var(--amber); box-shadow: 0 0 12px var(--amber); }
+.cap-veredicto.rojo .cap-veredicto-luz { background: var(--red); box-shadow: 0 0 12px var(--red); }
+.cap-veredicto-tit { font-size: 17px; font-weight: 700; letter-spacing: -.02em; line-height: 1.35; }
+.cap-veredicto-sub { margin-top: 8px; font-size: 13.5px; color: var(--muted); line-height: 1.6; max-width: 70ch; }
+.cap-veredicto-sub strong { color: var(--text); }
+
+/* Antes y después, uno al lado del otro: la comparación es el mensaje. */
+.cap-antesdespues { display: flex; align-items: stretch; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+.cap-ad {
+  flex: 1 1 140px; min-width: 0;
+  border: 1px solid var(--border); border-radius: 13px; background: var(--surface); padding: 14px 16px;
+}
+.cap-ad.verde { border-color: rgba(0, 200, 150, .4); }
+.cap-ad.ambar { border-color: rgba(245, 166, 35, .4); }
+.cap-ad.rojo { border-color: rgba(255, 92, 92, .45); }
+.cap-ad-l { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+.cap-ad-v { margin-top: 8px; font-size: 19px; letter-spacing: -.02em; }
+.cap-ad.rojo .cap-ad-v { color: var(--red); }
+.cap-ad.ambar .cap-ad-v { color: var(--amber); }
+.cap-ad.verde .cap-ad-v { color: var(--green); }
+.cap-ad-mc { margin-top: 6px; font-size: 11.5px; color: var(--muted); }
+.cap-ad-flecha { align-self: center; color: var(--dim); font-size: 20px; }
+
+.cap-techos { margin-top: 18px; display: grid; gap: 9px; }
+.cap-techos p { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 13px; }
+.cap-techo-l { color: var(--muted); }
+.cap-techos strong { font-family: var(--fm); font-variant-numeric: tabular-nums; color: var(--text); }
+
+/* ---------- El "y si", plegado ---------- */
+.cap-det { margin-top: 22px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+.cap-det > summary {
+  cursor: pointer; list-style: none; user-select: none;
+  padding: 14px 16px; font-size: 13.5px; font-weight: 600;
+}
+.cap-det > summary::-webkit-details-marker { display: none; }
+.cap-det > summary::before { content: '▸ '; color: var(--dim); }
+.cap-det[open] > summary::before { content: '▾ '; }
+.cap-det-cuerpo { padding: 4px 16px 18px; }
+.cap-supuesto { font-size: 12.5px; color: var(--muted); line-height: 1.65; max-width: 74ch; margin-bottom: 16px; }
+.cap-flujo { display: grid; gap: 7px; margin-bottom: 14px; }
+.cap-flujo p { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--muted); }
+.cap-flujo strong { font-family: var(--fm); font-variant-numeric: tabular-nums; color: var(--text); }
+.cap-flujo-total { border-top: 1px solid var(--border); padding-top: 8px; }
+.cap-recupera { font-size: 13.5px; font-weight: 600; margin-bottom: 12px; }
+.cap-fila-roja td { background: var(--red-dim); }
+
+/* ---------- Contra qué se compara ---------- */
+.cap-opciones { display: grid; gap: 12px; }
+.cap-opcion { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); padding: 16px 18px; }
+.cap-opcion.seguro { border-color: rgba(0, 200, 150, .32); }
+/* Lo no medido se apaga a propósito: no compite en igualdad con lo que está en el BOE. */
+.cap-opcion.incierto { opacity: .88; border-style: dashed; }
+.cap-opcion-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cap-opcion-nombre { font-size: 14.5px; font-weight: 700; }
+.cap-opcion-cab .fila-tag { margin-left: 0; }
+.cap-opcion-eur { margin-top: 10px; font-family: var(--fm); font-variant-numeric: tabular-nums; font-size: 22px; letter-spacing: -.02em; }
+.cap-opcion-nota { margin-top: 9px; font-size: 12.5px; color: var(--muted); line-height: 1.65; max-width: 74ch; }
+
+/* ---------- Avisos y preguntas ---------- */
+.cap-aviso, .cre-aviso {
+  display: flex; align-items: flex-start; gap: 11px; margin-top: 12px;
+  border: 1px solid rgba(245, 166, 35, .35); background: var(--amber-dim);
+  border-radius: 12px; padding: 12px 14px; font-size: 13px; line-height: 1.6;
+}
+.cap-aviso svg, .cre-aviso svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--amber); margin-top: 2px; }
+
+.cap-preg, .cre-preg {
+  margin-top: 14px; border: 1px solid var(--border2); border-radius: 14px;
+  background: var(--surface); padding: 16px 18px;
+}
+.cap-preg-intro, .cre-preg-intro { font-size: 13.5px; font-weight: 600; line-height: 1.6; max-width: 74ch; }
+/* El texto entero en monospace y con fondo de bloque de código, porque es literalmente algo
+   que se copia y se pega sin tocar una coma. */
+.cap-preg-txt, .cre-preg-txt {
+  margin-top: 10px; padding: 14px 16px;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+  font-family: var(--fm); font-size: 12.5px; line-height: 1.75;
+  white-space: pre-wrap; max-width: 88ch;
+}
+.cap-copiar, .cre-copiar { display: inline-flex; align-items: center; gap: 7px; margin-top: 12px; }
+.cap-copiar svg, .cre-copiar svg { width: 14px; height: 14px; }
+.cap-copiada, .cre-copiada { background: var(--green); color: #062018; border-color: transparent; }
+
+.vista.activa .cap-hero, .vista.activa .cap-caja { animation: fadeUp .5s var(--ease) both; }
+
+@media (max-width: 640px) {
+  #v-capital { max-width: 100%; overflow-x: hidden; overflow-wrap: break-word; }
+  .cap-hero, .cap-caja { padding: 20px 16px; border-radius: 16px; }
+  .cap-linea-cab { flex-wrap: wrap; gap: 4px 10px; }
+  .cap-campo-fila input { width: 100%; }
+  .cap-campos { gap: 12px; }
+  .cap-campos .cap-campo { flex: 1 1 130px; }
+  .cap-atajo { width: 100%; }
+  .cap-veredicto { padding: 16px 15px; }
+  /* En 390 px las dos cajas de "ahora" y "si lo metes" caben una al lado de la otra si la
+     flecha deja de ocupar columna: baja a un guion vertical y se van a mitad y mitad. */
+  .cap-ad { flex: 1 1 calc(50% - 22px); }
+  .cap-ad-flecha { font-size: 16px; }
+  .cap-preg-txt, .cre-preg-txt { font-size: 11.5px; padding: 12px 13px; }
+  .cap-copiar, .cre-copiar { width: 100%; justify-content: center; }
+}
+
+/* ============================================================
+   CRECER
+   ============================================================
+   La regla dura de esta pantalla está en el color y en el símbolo: verde con flecha SOLO
+   cuando hay señal estadística. Sin señal va ámbar, sin flecha y con la palabra "todavía no
+   se puede decir". Un "vas subiendo" sacado del ruido es la forma más rápida de que tome una
+   decisión cara con un dato que no existe. */
+
+.cre-tend {
+  border: 1px solid var(--border2); border-radius: 20px;
+  background: var(--surface); padding: 24px 26px;
+}
+.cre-tend.sube { border-color: rgba(0, 200, 150, .45); background: linear-gradient(180deg, var(--green-dim), transparent 70%), var(--surface); }
+.cre-tend.baja { border-color: rgba(255, 92, 92, .5); background: linear-gradient(180deg, var(--red-dim), transparent 70%), var(--surface); }
+.cre-tend.plana { border-color: var(--border2); }
+.cre-tend.sin-senal { border-color: rgba(245, 166, 35, .45); background: linear-gradient(180deg, var(--amber-dim), transparent 70%), var(--surface); }
+.cre-tend-tit {
+  display: flex; align-items: center; gap: 11px;
+  font-size: clamp(20px, 3.4vw, 28px); font-weight: 800; letter-spacing: -.025em; line-height: 1.2;
+}
+.cre-tend-tit svg { width: 17px; height: 17px; flex-shrink: 0; }
+.cre-tend.sube .cre-tend-tit svg { color: var(--green); }
+.cre-tend.baja .cre-tend-tit svg { color: var(--red); }
+.cre-tend.plana .cre-tend-tit svg { color: var(--muted); }
+.cre-tend.sin-senal .cre-tend-tit { color: var(--amber); }
+.cre-tend-txt { margin-top: 12px; font-size: 14px; color: var(--muted); line-height: 1.65; max-width: 72ch; }
+
+.cre-datos { display: flex; gap: 26px; flex-wrap: wrap; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border); }
+.cre-dato { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.cre-dato-v { font-family: var(--fm); font-variant-numeric: tabular-nums; font-size: 20px; letter-spacing: -.02em; }
+.cre-dato-l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; line-height: 1.45; }
+
+/* ---------- Las barras de los meses ---------- */
+.cre-barras {
+  display: flex; align-items: flex-end; gap: 5px; margin-top: 20px;
+  border: 1px solid var(--border); border-radius: 14px; background: var(--surface); padding: 14px 12px;
+}
+.cre-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.cre-col-v { font-size: 11px; color: var(--muted); }
+.cre-col-barra { width: 100%; height: 84px; display: flex; align-items: flex-end; }
+.cre-col-lleno { width: 100%; border-radius: 5px 5px 2px 2px; background: linear-gradient(180deg, var(--green), rgba(0, 200, 150, .35)); }
+/* Un mes en blanco NO desaparece: se queda como una raya roja. Es el dato más importante
+   que se puede perder de vista. */
+.cre-col-lleno.cero { background: var(--red); opacity: .55; }
+.cre-col-mes { font-size: 9px; color: var(--dim); white-space: nowrap; }
+
+/* ---------- La estacionalidad, plegada ---------- */
+.cre-det { margin-top: 18px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+.cre-det > summary { cursor: pointer; list-style: none; user-select: none; padding: 14px 16px; font-size: 13.5px; font-weight: 600; }
+.cre-det > summary::-webkit-details-marker { display: none; }
+.cre-det > summary::before { content: '▸ '; color: var(--dim); }
+.cre-det[open] > summary::before { content: '▾ '; }
+.cre-det-cuerpo { padding: 4px 16px 18px; }
+.cre-meses { display: grid; gap: 8px; margin: 14px 0; }
+.cre-mes-fila { display: grid; grid-template-columns: 78px 1fr 42px 58px; align-items: center; gap: 10px; }
+.cre-mes-nombre { font-size: 12px; color: var(--muted); }
+.cre-mes-track { height: 8px; border-radius: 99px; background: var(--surface2); border: 1px solid var(--border); overflow: hidden; }
+.cre-mes-lleno { height: 100%; background: linear-gradient(90deg, rgba(0, 200, 150, .4), var(--green)); border-radius: 99px; }
+.cre-mes-v { font-size: 12px; text-align: right; }
+.cre-mes-obs { font-size: 10px; text-align: right; }
+
+/* ---------- Las palancas ---------- */
+.cre-grupo { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: var(--text); margin: 26px 0 4px; }
+.cre-grupo:first-child { margin-top: 0; }
+.cre-grupo-sub { font-size: 12.5px; color: var(--muted); line-height: 1.6; margin-bottom: 14px; max-width: 74ch; }
+.cre-palancas { display: grid; gap: 12px; }
+.cre-palanca { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); padding: 18px 20px; }
+/* Una palanca de impacto negativo no se pinta igual que una que suma: hoy mudarse le CUESTA
+   dinero, y esa es la respuesta, no un fallo del cálculo. */
+.cre-palanca.cuesta { border-color: rgba(245, 166, 35, .35); }
+.cre-palanca-cab { display: flex; align-items: flex-start; gap: 13px; }
+.cre-palanca-n {
+  flex: 0 0 26px; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--surface2); color: var(--muted); font-size: 12px;
+  display: flex; align-items: center; justify-content: center; margin-top: 2px;
+}
+.cre-palanca-tit { font-size: 16px; font-weight: 700; letter-spacing: -.02em; line-height: 1.3; }
+.cre-palanca-cambio { margin-top: 5px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.cre-palanca-cifras { display: flex; align-items: flex-end; gap: 24px; flex-wrap: wrap; margin: 18px 0 0; }
+.cre-palanca-big span, .cre-palanca-mes span {
+  display: block; font-family: var(--fm); font-variant-numeric: tabular-nums; letter-spacing: -.025em; line-height: 1.05;
+}
+.cre-palanca-big span { font-size: clamp(26px, 5.5vw, 36px); color: var(--text); }
+.cre-palanca-big.pos span { color: var(--green); }
+.cre-palanca-big.neg span { color: var(--amber); }
+.cre-palanca-mes span { font-size: 18px; color: var(--muted); }
+.cre-palanca-big small, .cre-palanca-mes small {
+  display: block; margin-top: 8px; font-size: 10.5px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .08em; line-height: 1.45;
+}
+.cre-esfuerzo {
+  margin-left: auto; align-self: center;
+  font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 6px; white-space: nowrap;
+  background: var(--surface2); color: var(--muted);
+}
+.cre-esfuerzo.bajo { background: var(--green-dim); color: var(--green); }
+.cre-esfuerzo.medio { background: var(--amber-dim); color: var(--amber); }
+.cre-esfuerzo.alto { background: var(--red-dim); color: var(--red); }
+.cre-palanca-equivale { margin-top: 14px; font-size: 13px; line-height: 1.6; color: var(--muted); }
+.cre-palanca-equivale strong { color: var(--green); font-family: var(--fm); }
+.cre-palanca-l { font-size: 10px; text-transform: uppercase; letter-spacing: .11em; color: var(--muted); margin: 16px 0 7px; }
+.cre-palanca-quien {
+  margin-top: 14px; padding: 11px 13px; border-radius: 9px;
+  background: var(--surface2); border-left: 2px solid var(--border2);
+  font-size: 12.5px; color: var(--muted); line-height: 1.6; max-width: 74ch;
+}
+.cre-txt { font-size: 13.5px; line-height: 1.65; max-width: 74ch; color: var(--muted); }
+.cre-txt.fuerte { color: var(--text); font-weight: 600; }
+.cre-lista { margin: 8px 0 0; padding-left: 18px; }
+.cre-lista li { font-size: 13px; line-height: 1.65; margin-bottom: 7px; max-width: 74ch; }
+.cre-pie { margin-top: 16px; font-size: 12px; color: var(--dim); line-height: 1.6; max-width: 78ch; }
+
+/* ---------- El siguiente objetivo ---------- */
+.cre-obj {
+  border: 1px solid rgba(0, 200, 150, .4); border-radius: 20px;
+  background: linear-gradient(180deg, var(--green-dim), transparent 55%), var(--surface);
+  padding: 26px 28px;
+}
+.cre-eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+.cre-obj-big { margin-top: 14px; }
+.cre-obj-big span {
+  display: block; font-family: var(--fm); font-variant-numeric: tabular-nums;
+  font-size: clamp(38px, 9vw, 60px); font-weight: 500; line-height: 1;
+  letter-spacing: -.03em; color: var(--green);
+}
+.cre-obj-big small {
+  display: block; margin-top: 9px; font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .08em;
+}
+.cre-obj-falta { margin-top: 16px; font-size: 15px; line-height: 1.6; }
+.cre-obj-falta strong { font-family: var(--fm); color: var(--green); }
+.cre-obj-cifras { display: flex; gap: 26px; flex-wrap: wrap; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
+.cre-obj-cifras > div { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.cre-obj-l { font-size: 10.5px; text-transform: uppercase; letter-spacing: .11em; color: var(--muted); margin: 22px 0 8px; }
+.cre-obj-mejor { margin-top: 10px; font-size: 13px; color: var(--muted); line-height: 1.6; }
+.cre-obj-mejor strong { font-family: var(--fm); color: var(--text); }
+
+.cre-barra { margin-top: 22px; }
+.cre-barra-track { height: 10px; border-radius: 99px; overflow: hidden; background: var(--surface2); border: 1px solid var(--border); }
+.cre-barra-lleno { height: 100%; border-radius: 99px; min-width: 2px; background: linear-gradient(90deg, rgba(0, 200, 150, .45), var(--green)); transition: width .6s var(--ease); }
+.cre-barra-pies { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 11px; color: var(--muted); }
+.cre-barra-pct { color: var(--green); font-variant-numeric: tabular-nums; }
+.cre-barra-pies .der { text-align: right; }
+
+/* ---------- Los tres futuros ---------- */
+.cre-escenarios { display: grid; gap: 12px; }
+.cre-esc { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); padding: 18px 20px; }
+/* El escenario de que se pare todo es el que hay que poder mirar sin apartar la vista: no se
+   esconde, pero tampoco se pinta de verde. */
+.cre-esc.nada { border-color: rgba(255, 92, 92, .35); }
+.cre-esc-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cre-esc-tit { font-size: 15.5px; font-weight: 700; letter-spacing: -.02em; }
+.cre-esc-cab .fila-tag { margin-left: 0; }
+.cre-esc-cols { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 16px; }
+.cre-esc-col { flex: 1 1 150px; min-width: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); padding: 13px 14px; }
+.cre-esc-plazo { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+.cre-esc-eur { margin-top: 8px; font-family: var(--fm); font-variant-numeric: tabular-nums; font-size: 20px; letter-spacing: -.02em; }
+.cre-esc-mc { margin-top: 5px; font-size: 11px; color: var(--muted); line-height: 1.5; }
+.cre-esc-sup { margin-top: 14px; font-size: 12.5px; color: var(--muted); line-height: 1.65; max-width: 74ch; }
+.cre-esc-quema {
+  margin-top: 14px; padding: 12px 14px; border-radius: 9px;
+  background: var(--red-dim); border-left: 2px solid var(--red);
+  font-size: 13px; line-height: 1.65; max-width: 74ch;
+}
+.cre-esc-quema strong { color: var(--red); }
+
+.vista.activa .cre-tend, .vista.activa .cre-obj { animation: fadeUp .5s var(--ease) both; }
+
+@media (max-width: 640px) {
+  #v-crecimiento { max-width: 100%; overflow-x: hidden; overflow-wrap: break-word; }
+  .cre-tend { padding: 20px 16px; border-radius: 16px; }
+  .cre-datos { gap: 16px 20px; }
+  .cre-dato-v { font-size: 18px; }
+  .cre-barras { gap: 3px; padding: 12px 9px; }
+  .cre-col-barra { height: 64px; }
+  .cre-col-v { font-size: 10px; }
+  .cre-col-mes { font-size: 8px; }
+  /* Doce columnas en 390 px son 25 px cada una: "jul 26" no cabe y los rótulos se pisarían.
+     Se cae el año, que en una serie de doce meses seguidos se deduce sin esfuerzo. */
+  .cre-col-anio { display: none; }
+  .cre-mes-fila { grid-template-columns: 62px 1fr 36px 46px; gap: 7px; }
+  .cre-palanca { padding: 16px 15px; }
+  .cre-palanca-cifras { gap: 16px; }
+  .cre-esfuerzo { margin-left: 0; }
+  .cre-obj { padding: 20px 16px; border-radius: 16px; }
+  .cre-obj-cifras { gap: 16px; }
+  .cre-esc { padding: 16px 15px; }
+  .cre-esc-cols { gap: 10px; }
+  .cre-esc-col { flex: 1 1 calc(50% - 5px); padding: 12px 12px; }
+  /* Los tres pies de la barra no caben en una línea de 390 px: dos filas, como en "Y ahora
+     qué", en vez de desbordar la página entera. */
+  .cre-barra-pies { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; font-size: 10.5px; }
+  .cre-barra-pies span { grid-column: 1; }
+  .cre-barra-pct { grid-column: 2; grid-row: 1; text-align: right; }
+  .cre-barra-pies .der { grid-column: 1; grid-row: 2; text-align: left; }
+}

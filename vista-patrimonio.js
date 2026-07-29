@@ -12,13 +12,10 @@ import {
   sugerenciaGastosFijos,
 } from './patrimonio.js';
 import { formatoEuros, IRPF_DEFAULT, SPLIT } from './calculos.js';
-import { irpfAnualReal } from './objetivo.js';
 
 // Nombres exactos de las reservas sugeridas: si existen, el botón desaparece.
 const NOMBRE_IMPUESTOS = 'Impuestos IRPF';
 const NOMBRE_GASTOS = 'Gastos fijos mes siguiente';
-// La reserva del IRPF real lleva nombre propio: convive con la de arriba sin pisarla.
-const NOMBRE_IMPUESTOS_REAL = 'IRPF real del año';
 
 const TIPOS_CUENTA = [['banco', 'Banco'], ['cripto', 'Cripto'], ['efectivo', 'Efectivo']];
 const CLASES_OBJETIVO = [['reserva', 'Reserva'], ['objetivo', 'Objetivo']];
@@ -133,75 +130,89 @@ function tieneObjetivo(objetivos, nombre) {
   return objetivos.some((o) => String(o.nombre || '').trim().toLowerCase() === buscado);
 }
 
-// Lo que ya está etiquetado para la MISMA factura: la reserva plana y la real provisionan
-// la misma liquidación anual de IRPF, así que lo que hay en una descuenta de la otra.
-function yaReservadoParaIrpf(objetivos) {
-  const nombres = [NOMBRE_IMPUESTOS, NOMBRE_IMPUESTOS_REAL].map((n) => n.toLowerCase());
-  return objetivos
-    .filter((o) => nombres.includes(String(o.nombre || '').trim().toLowerCase()))
-    .reduce((acc, o) => acc + (Number(o.asignado) || 0), 0);
-}
-
 // A céntimos: un data-importe con 12 decimales acaba en el importe de una reserva.
 function aCentimos(n) {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
 
-// El IRPF de verdad, no el plano.
+// LA reserva de Hacienda de esta pantalla. UNA cifra, la misma que "Hacienda" y que
+// "Y ahora qué": la que calcula `reservaImpuestosHoy()` en fiscal.js y llega por ctx.
 //
-// La sugerencia de arriba reserva el IRPF PLANO de los retiros ya hechos: un porcentaje
-// fijo, el mismo para el primer euro que para el último. Pero el IRPF español va por
-// tramos, así que ese número casi nunca es el que Hacienda va a pedir.
+// LO QUE SE ARREGLÓ AQUÍ, y son tres cosas del mismo tronco:
 //
-// Aquí se calcula el REAL sobre las ventas medias del negocio y salen dos caminos
-// opuestos, y hay que enseñar el que toque sin rodeos:
-//   · te retienen de MENOS -> falta dinero: botón para reservar el IRPF real del año;
-//   · te retienen de MÁS   -> Hacienda devuelve: aviso verde y ningún botón, porque no
-//     hay nada que apartar. Este es el dato que más tranquiliza y no se puede esconder.
+//  1) La cifra salía de `irpfAnualReal(modeloObjetivo, ventasMedia)`, o sea del DEVENGADO:
+//     su 40 % del beneficio del negocio, lo facture o no. Esa no es su renta. La app entera
+//     migró a lo FACTURADO (app.js: "`rentaFiscal` es lo que FACTURA y es la que manda para
+//     TODO lo que sea impuestos") y esta pantalla se quedó fuera: decía un IRPF de 1.055 €
+//     cuando el suyo son 358 €, casi 3x, y ofrecía congelar ese dinero.
 //
-// Las dos reservas apartan dinero para la MISMA liquidación anual, así que no pueden
-// convivir sumándose: cuando aparece la real, la plana se calla, y el importe que ofrece
-// es solo el hueco que falta sobre lo que ya esté etiquetado. Si no, se contaba dos veces
-// y "Libre de verdad" se hundía con una alerta roja falsa.
-// `sustituye` le dice a pintarAvisos que esta reserva manda sobre la plana.
-function bloqueIrpfReal(objetivos, ctx, f) {
-  const vacio = { aviso: '', boton: '', sustituye: false };
-  if (!ctx || !ctx.modeloObjetivo) return vacio;
+//  2) El botón plano reservaba el 20 % de lo ya retirado, una TERCERA cifra distinta de las
+//     otras dos pantallas. Ahora no hay tercera cifra: hay una.
+//
+//  3) El aviso verde decía "no tienes que reservar nada extra" y justo debajo se pintaba un
+//     botón "Reservar X para impuestos". Las dos frases salían del mismo render. No se
+//     arregla callando el botón: el dinero de los 130 hay que tenerlo igual. Se arregla
+//     diciendo la verdad entera, que son DOS cosas distintas y no se contradicen:
+//       · el 130 es un ANTICIPO del 20 % que sale de su cuenta en una FECHA;
+//       · el IRPF real del año es menor, y la diferencia vuelve en la Renta.
+//     O sea: sí hay que apartar, y además le van a devolver. Las dos a la vez.
+function bloqueHacienda(objetivos, ctx, f) {
+  const vacio = { aviso: '', boton: '', manda: false };
+  const caja = ctx && ctx.reservaHacienda;
+  if (!caja || !Number.isFinite(Number(caja.debeHaber))) return vacio;
 
-  const a = irpfAnualReal(ctx.modeloObjetivo, ctx.ventasMedia || 0);
-  if (!Number.isFinite(a.irpfReal) || !Number.isFinite(a.diferencia)) return vacio;
+  const debeHaber = Math.max(0, Number(caja.debeHaber) || 0);
+  // Lo ya etiquetado sale de fiscal.js con la MISMA regla que usan las otras dos pantallas
+  // (`RE_RESERVA_IMPUESTOS`), no de una lista de dos nombres exactos que vivía solo aquí:
+  // una reserva llamada "Impuestos" -que es justo el nombre que "Y ahora qué" le manda
+  // crear- no entraba en esta cuenta y sí en las otras, así que el hueco salía distinto.
+  const yaHay = Math.max(0, Number(caja.reserva && caja.reserva.importe) || 0);
+  const falta = aCentimos(Math.max(0, Number(caja.falta) || 0));
 
-  // Hacienda devuelve: nada que reservar, y se dice con todas las letras.
-  if (a.diferencia > 0) {
+  // De qué está hecha la cifra de hoy. Sin esto es un número a secas.
+  const trozos = [];
+  if (caja.vencidoSinIngresar > 0) {
+    trozos.push(`${f(caja.vencidoSinIngresar)} de modelos 130 YA vencidos`
+      + (caja.recargoQueCorre > 0 ? `, más ${f(caja.recargoQueCorre)} de recargo que ya corre` : ''));
+  }
+  if (caja.porVencerDevengado > 0 && caja.primeroPorVencer) {
+    trozos.push(`${f(caja.porVencerDevengado)} del ${esc(caja.primeroPorVencer.periodo)}, que vencen el ${esc(caja.primeroPorVencer.fechaLimite)}`);
+  }
+  const deQue = trozos.length ? ` Son ${trozos.join(' y ')}.` : '';
+
+  // La devolución del año. Es una BUENA noticia y no puede esconderse, pero tampoco puede
+  // decir "no reserves nada": el anticipo hay que pagarlo igual, y antes.
+  const dev = Math.max(0, Number(caja.devolucionEsperada) || 0);
+  const laRenta = dev > 0
+    ? ` Ojo, que no es lo mismo que tu factura final: tu IRPF real del año son ${f(caja.irpfAnual)}, `
+      + `así que con los cuatro 130 adelantas de más y en la Renta te devolverían unos ${f(dev)}. `
+      + 'Eso llega en junio del año que viene; esto hay que tenerlo ahora.'
+    : '';
+
+  if (!(debeHaber > 0)) return vacio;
+
+  // Ya está cubierto: verde, y sin ningún botón que lo contradiga.
+  if (!(falta > 0)) {
     return {
-      aviso: `<div class="alerta ok">${ICON_OK}<span>Vas pagando de más: Hacienda debería devolverte <strong>${f(a.diferencia)}</strong>.
-        <span class="mc">Te retienes ${f(a.irpfRetenido)} al año y el IRPF real por tramos son ${f(a.irpfReal)}. No tienes que reservar nada extra: ese dinero ya es tuyo, solo que no lo ves hasta la declaración.</span></span></div>`,
+      aviso: `<div class="alerta ok">${ICON_OK}<span>Lo de Hacienda lo tienes cubierto: hacen falta <strong>${f(debeHaber)}</strong> y tienes ${f(yaHay)} etiquetados.
+        <span class="mc">${deQue}${laRenta}</span></span></div>`,
       boton: '',
-      sustituye: false,
+      manda: true,
     };
   }
 
-  // Sin base imponible no hay factura que provisionar.
-  if (!(a.irpfReal > 0)) return vacio;
-
-  // La reserva real ya existe: la plana sobra igual, así que se calla, pero no se insiste.
-  if (tieneObjetivo(objetivos, NOMBRE_IMPUESTOS_REAL)) return { ...vacio, sustituye: true };
-
-  // La factura entera menos lo que ya esté etiquetado para ella (la reserva plana, si la
-  // hay). Cuando lo etiquetado es justo lo retenido, esto es exactamente lo que falta.
-  const yaHay = yaReservadoParaIrpf(objetivos);
-  const porReservar = aCentimos(Math.max(0, a.irpfReal - yaHay));
-  if (!(porReservar > 0)) return { ...vacio, sustituye: true };
-
-  const conYaHay = yaHay > 0 ? ` Ya tienes ${f(yaHay)} etiquetados para esa misma factura, así que aquí solo va lo que falta.` : '';
+  const conYaHay = yaHay > 0
+    ? ` Ya tienes ${f(yaHay)} etiquetados para esa misma factura, así que aquí solo va lo que falta.`
+    : '';
   const etiqueta = yaHay > 0
-    ? `Reservar ${f(porReservar)} — lo que te falta para el IRPF real del año (${f(a.irpfReal)})`
-    : `Reservar ${f(porReservar)} — el IRPF real de todo el año`;
+    ? `Reservar ${f(falta)} — lo que te falta para Hacienda (${f(debeHaber)})`
+    : `Reservar ${f(falta)} para Hacienda`;
   return {
-    aviso: '',
-    boton: `<button type="button" class="btn btn-ghost" id="pat-sug-impuestos-real" data-importe="${porReservar}"
-      title="El IRPF real por tramos son ${f(a.irpfReal)} al año y solo te retienes ${f(a.irpfRetenido)}: te faltan ${f(-a.diferencia)}.${conYaHay}">${etiqueta}</button>`,
-    sustituye: true,
+    aviso: `<div class="aviso-ambar">${ICON_WARN}<span>Para Hacienda tienes que tener apartados <strong>${f(debeHaber)}</strong> hoy.
+      <span class="mc">${deQue}${conYaHay}${laRenta}</span></span></div>`,
+    boton: `<button type="button" class="btn btn-ghost" id="pat-sug-impuestos" data-importe="${falta}"
+      title="Es la misma cifra que ves en Hacienda y en Y ahora qué.${deQue}${conYaHay}">${etiqueta}</button>`,
+    manda: true,
   };
 }
 
@@ -215,20 +226,23 @@ function pintarAvisos(e, objetivos, ctx, f) {
   const resto = e.sobreasignado ? e.avisos.slice(1) : e.avisos;
   html += resto.map((a) => `<div class="aviso-ambar">${ICON_WARN}<span>${esc(a)}</span></div>`).join('');
 
-  // El IRPF real del año: o un aviso verde (devuelven) o un botón (falta dinero).
-  const real = bloqueIrpfReal(objetivos, ctx, f);
-  html += real.aviso;
+  // La reserva de Hacienda: un aviso y, como mucho, UN botón. Nunca los dos contradiciéndose.
+  const hacienda = bloqueHacienda(objetivos, ctx, f);
+  html += hacienda.aviso;
 
   // Sugerencias: el sistema propone importes, el usuario decide. Son botones, nunca
   // se aplican solos. El importe viaja en data-importe porque bindPatrimonio no ve el ctx.
   const botones = [];
-  // La plana solo si la real no manda: las dos provisionan la misma factura anual y
-  // ofrecerlas a la vez etiquetaba dos veces el mismo dinero.
-  if (!real.sustituye && !tieneObjetivo(objetivos, NOMBRE_IMPUESTOS)) {
+  if (hacienda.boton) botones.push(hacienda.boton);
+  // El 20 % plano de lo retirado solo sobrevive como red de seguridad: si no llega la cifra
+  // buena por ctx, más vale una estimación declarada que ninguna reserva.
+  if (!hacienda.manda && !tieneObjetivo(objetivos, NOMBRE_IMPUESTOS)) {
     const imp = aCentimos(sugerenciaImpuestos(ctx.retiros || [], ctx.irpfCfg || IRPF_DEFAULT, splitDe(ctx)));
-    botones.push(`<button type="button" class="btn btn-ghost" id="pat-sug-impuestos" data-importe="${imp}">Reservar ${f(imp)} para impuestos</button>`);
+    if (imp > 0) {
+      botones.push(`<button type="button" class="btn btn-ghost" id="pat-sug-impuestos" data-importe="${imp}"
+        title="Estimación: el ${(ctx.irpfCfg || IRPF_DEFAULT).porcentaje} % de lo que llevas retirado. La cifra buena está en la pestaña Hacienda.">Reservar ${f(imp)} para impuestos (estimado)</button>`);
+    }
   }
-  if (real.boton) botones.push(real.boton);
   if (!tieneObjetivo(objetivos, NOMBRE_GASTOS)) {
     const imp = sugerenciaGastosFijos(ctx.gastosFijosTotal);
     botones.push(`<button type="button" class="btn btn-ghost" id="pat-sug-gastos" data-importe="${imp}">Reservar ${f(imp)} para los gastos fijos del mes que viene</button>`);
@@ -352,8 +366,6 @@ export function bindPatrimonio(handlers) {
       handlers.rerender();
     } else if (btn.id === 'pat-sug-impuestos') {
       anadirReserva(NOMBRE_IMPUESTOS, parseFloat(btn.dataset.importe) || 0);
-    } else if (btn.id === 'pat-sug-impuestos-real') {
-      anadirReserva(NOMBRE_IMPUESTOS_REAL, parseFloat(btn.dataset.importe) || 0);
     } else if (btn.id === 'pat-sug-gastos') {
       anadirReserva(NOMBRE_GASTOS, parseFloat(btn.dataset.importe) || 0);
     }

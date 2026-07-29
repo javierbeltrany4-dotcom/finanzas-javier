@@ -29,18 +29,35 @@
     </div>
   </header>
 
+  <!-- EL ORDEN DE LAS PESTAÑAS NO ES DECORATIVO. Va de lo que aprieta hoy a lo que decide el
+       año que viene: primero qué hacer y qué vence, después qué ha pasado (resumen, histórico,
+       retiros, mi dinero, calendario), después qué tengo (patrimonio y capital) y al final qué
+       podría pasar (cuánto facturar, crecer, dónde vivir).
+
+       Son doce, y en un iPhone de 390 px doce pestañas en una fila obligan a arrastrar tres
+       pantallazos para llegar a la última. Por eso en móvil la barra se reparte en DOS filas
+       con scroll horizontal (ver .tabs en style.css): la mitad de recorrido y todas alcanzables
+       con el pulgar, sin menús ocultos. La activa se centra sola al cambiar de pestaña. -->
   <nav class="tabs-wrap">
     <div class="tabs" role="tablist">
       <!-- "Y ahora qué" va primera y es la que abre por defecto: es la pantalla que
-           responde dónde estoy, qué viene y qué hago hoy. Resumen se queda la segunda. -->
+           responde dónde estoy, qué viene y qué hago hoy. Resumen se queda la tercera. -->
       <button class="tab activa" data-vista="decisiones">Y ahora qué</button>
+      <!-- Hacienda va justo detrás: es la única pestaña con fechas que vencen solas, y lo
+           vencido no espera a que le apetezca mirar el resumen. -->
+      <button class="tab" data-vista="fiscal">Hacienda</button>
       <button class="tab" data-vista="resumen">Resumen</button>
       <button class="tab" data-vista="historico">Histórico</button>
       <button class="tab" data-vista="retiros">Retiros</button>
       <button class="tab" data-vista="midinero">Mi dinero</button>
       <button class="tab" data-vista="calendario">Calendario</button>
       <button class="tab" data-vista="patrimonio">Mi patrimonio</button>
+      <!-- "Mi capital" va pegada a "Mi patrimonio" a propósito: una dice lo que tiene y la
+           otra, cuánto de eso puede mover de verdad. Separarlas invitaba a leer el saldo
+           como si fuera dinero disponible. -->
+      <button class="tab" data-vista="capital">Mi capital</button>
       <button class="tab" data-vista="objetivo">Cuánto facturar</button>
+      <button class="tab" data-vista="crecimiento">Crecer</button>
       <button class="tab" data-vista="residencia">Dónde vivir</button>
     </div>
   </nav>
@@ -80,6 +97,63 @@
       <div class="bloque">
         <div class="bloque-title">Dónde te sale mejor vivir, hoy</div>
         <div id="dec-paises"></div>
+      </div>
+    </section>
+
+    <!-- HACIENDA -->
+    <!-- El orden NO es decorativo: lo vencido va primero porque es lo único que empeora solo
+         mientras la pantalla está cerrada. Después el dinero que hay que tener guardado hoy,
+         después el calendario, y solo al final la teoría (qué es cada modelo, qué preguntar,
+         qué comprobar). Quien abra esto con prisa tiene la respuesta en el primer bloque. -->
+    <section class="vista" id="v-fiscal">
+      <!-- El aviso va en el HTML, no en la vista: tiene que estar SIEMPRE, aunque el render
+           falle o los datos no lleguen. Es la letra pequeña que sostiene la pantalla. -->
+      <div class="aviso-ambar" id="fis-aviso">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span>Plazos, recargos y sanciones salen de <strong>docs/situacion-real-cliente-aleman.md</strong>,
+          con su artículo al lado. Los importes de los modelos son <strong>estimaciones</strong> hechas
+          con lo que la app sabe: tus retiros, no tus facturas. Lo que presentas ante Hacienda lo
+          firma tu asesoría, no este dashboard. Y lo que el informe no da por verificado sale
+          marcado como tal, con la pregunta exacta para cerrarlo.</span>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">Lo primero: qué tienes vencido</div>
+        <div id="fis-urgente"></div>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">Cuánto tienes que tener guardado hoy</div>
+        <div id="fis-apartar"></div>
+      </div>
+
+      <!-- La Renta va aquí, pegada al dinero y antes del calendario: es la otra mitad de la
+           misma frase. Arriba se dice cuánto tiene que tener guardado HOY; aquí, qué pasa
+           con todo eso en junio. Separarlas era lo que hacía que el 20 % del modelo 130
+           pareciera su tipo de IRPF, que no lo es. -->
+      <div class="bloque">
+        <div class="bloque-title">Tu declaración de la Renta, sin sorpresas</div>
+        <div id="fis-renta"></div>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">El calendario del año</div>
+        <div id="fis-calendario"></div>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">Qué es cada modelo y por qué te obliga</div>
+        <div id="fis-modelos"></div>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">Las preguntas para tu asesoría</div>
+        <div id="fis-preguntas"></div>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">Lo que tienes que comprobar tú</div>
+        <div id="fis-pendiente"></div>
       </div>
     </section>
 
@@ -234,6 +308,44 @@
       </div>
     </section>
 
+    <!-- MI CAPITAL -->
+    <!-- El orden responde a una sola secuencia: cuánto tengo libre de verdad, cuánto aguanto
+         si esto se para, cuánto puedo mover, y contra qué se compara mover ese dinero. La
+         cifra grande de la primera caja puede salir NEGATIVA, y es el caso que más importa:
+         significa que algo de lo comprometido no tiene dinero detrás. -->
+    <section class="vista" id="v-capital">
+      <!-- El aviso va en el HTML, no en la vista: tiene que estar SIEMPRE, aunque el render
+           falle o los datos no lleguen. Es la letra pequeña que sostiene la pantalla. -->
+      <div class="aviso-ambar" id="cap-aviso">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span>El dinero que aquí se descuenta para <strong>Hacienda</strong> sale de la pestaña
+          "Hacienda", con su calendario y su artículo al lado; no se estima en esta pantalla.
+          Los <strong>6 meses de colchón</strong> y los cortes del semáforo son una
+          <strong>decisión de diseño, no una norma</strong>: no hay ninguna ley que los exija.
+          Y esto no es asesoramiento de inversión: la app solo calcula qué te queda detrás.</span>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">Cuánto tienes libre de verdad</div>
+        <div id="cap-libre"></div>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">Si mañana no vendes nada más</div>
+        <div id="cap-colchon"></div>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">Quiero meter algo en otra cosa</div>
+        <div id="cap-simular"></div>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">Y si ese dinero se quedara en el negocio de siempre</div>
+        <div id="cap-coste"></div>
+      </div>
+    </section>
+
     <!-- CUÁNTO FACTURAR -->
     <section class="vista" id="v-objetivo">
       <div class="bloque"><div class="bloque-title">Quiero quedarme limpio con…</div>
@@ -251,6 +363,43 @@
         <p class="obj-nota" id="obj-palancas-nota"></p></div>
       <div class="bloque"><div class="bloque-title">Ajustes — solo si algo cambia</div>
         <div id="obj-ajustes"></div></div>
+    </section>
+
+    <!-- CRECER -->
+    <!-- Primero el dato (suben o bajan), después lo que se puede mover, después el siguiente
+         escalón y al final los tres futuros. Si el orden fuera al revés, se estarían eligiendo
+         palancas antes de saber si el negocio se mueve solo o no. -->
+    <section class="vista" id="v-crecimiento">
+      <div class="aviso-ambar" id="cre-aviso">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span>Aquí no se dibuja ninguna flecha sin señal estadística: con menos de tres meses
+          cerrados, o con una recta que no explica lo que pasa, la pantalla dice
+          <strong>"todavía no se puede decir"</strong> en vez de inventarse una tendencia.
+          El impacto de cada palanca está medido en lo que te queda <strong>limpio</strong>,
+          con el IRPF real por tramos, y las proyecciones son <strong>cuentas, no
+          predicciones</strong>: cada escenario lleva la etiqueta de si sale de tus datos o de
+          un supuesto.</span>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">¿Suben o bajan tus ventas?</div>
+        <div id="cre-tendencia"></div>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">Qué palanca mueve más</div>
+        <div id="cre-palancas"></div>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">El siguiente objetivo</div>
+        <div id="cre-objetivo"></div>
+      </div>
+
+      <div class="bloque">
+        <div class="bloque-title">Los tres futuros</div>
+        <div id="cre-escenarios"></div>
+      </div>
     </section>
 
     <!-- DÓNDE VIVIR -->
@@ -305,7 +454,7 @@
       <label>Conceptos que tributan (separados por coma)</label>
       <input type="text" id="g-banco" />
 
-      <label>Conceptos que NO tributan (cripto)</label>
+      <label>Conceptos cobrados en cripto (tributan igual)</label>
       <input type="text" id="g-cripto" />
 
       <label>Mis gastos fijos mensuales</label>

@@ -3,13 +3,16 @@
 // Antes era caché primero: rápido, pero te enseñaba la versión vieja aunque hubiera una nueva,
 // y había que recargar dos veces para verla. Ahora, si hay internet, siempre ves lo último;
 // la caché solo entra cuando no hay red o cuando tarda demasiado.
-const CACHE = 'mis-finanzas-v13';
+const CACHE = 'mis-finanzas-v16';
 const SHELL = [
   './', './index.html', './style.css', './app.js', './calculos.js', './tradinverso.js',
   './patrimonio.js', './vista-patrimonio.js',
   './objetivo.js', './vista-objetivo.js',
   './residencia.js', './vista-residencia.js', './bali.js',
   './decisiones.js', './vista-decisiones.js',
+  './fiscal.js', './vista-fiscal.js', './renta.js',
+  './capital.js', './vista-capital.js',
+  './crecimiento.js', './vista-crecimiento.js',
   './sync.js', './respaldo.js',
   './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png',
 ];

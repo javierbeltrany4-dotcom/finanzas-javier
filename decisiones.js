@@ -44,6 +44,13 @@ import {
 
 import { estadoPatrimonio, normalizarObjetivo } from './patrimonio.js';
 
+// LA cifra de "cuánto tiene que estar apartado hoy para Hacienda". Viene de fiscal.js, que es
+// el único módulo que sabe de PLAZOS: la reserva de impuestos no es una provisión que se pueda
+// ir haciendo despacio, es caja que Hacienda pide un día concreto. Antes esta pantalla -la que
+// abre la app- calculaba su propia versión (solo la parte devengada del IRPF real) y daba la
+// cifra MÁS BAJA de las tres pantallas que responden a la misma pregunta.
+import { reservaImpuestosHoy, reservaImpuestosEtiquetada } from './fiscal.js';
+
 // La escala de IRPF sale de aquí, no de la agregada aproximada de objetivo.js: estas dos
 // están en el informe con etiqueta OFICIAL y URL (sección 2.1).
 import {
@@ -53,6 +60,7 @@ import {
   ESCALAS_AUTONOMICAS,
   cuotaRetaAnual,
   detalleIrpfEspana,
+  escalaIrpfAgregada,
   tramoRetaDe,
   normalizarOpciones as normalizarResidencia,
 } from './residencia.js';
@@ -305,7 +313,29 @@ function contexto(ctx) {
     situacionFiscal, rentaFiscal, irpfDelAnio, cuentas, objetivos, residencia, gastosVida, tarifaPlana,
   };
   c2.fraccionDelAnio = fraccionDelAnioDevengada(c2);
+  // LA reserva de impuestos del día, calculada por fiscal.js con los mismos datos, el mismo
+  // patrimonio y el mismo "hoy" que usan "Hacienda" y "Mi patrimonio". Se puede forzar por
+  // ctx (los tests lo usan) y si el cálculo no sale, se cae a null y estadoReservaImpuestos
+  // vuelve al prorrateo, que es lo único reconstruible desde aquí.
+  c2.reservaHacienda = c.reservaHacienda || reservaHaciendaDe(c2, c);
   return c2;
+}
+
+// Envoltorio con red: fiscal.js necesita `datos`, `presentados` y `hoy`. Si algo falta o
+// revienta, se devuelve null en vez de tumbar la pantalla que abre la app.
+function reservaHaciendaDe(c2, ctxOriginal) {
+  if (!c2.hoy) return null;
+  try {
+    const r = reservaImpuestosHoy({
+      datos: c2.datos,
+      presentados: ctxOriginal.presentados,
+      renta: ctxOriginal.renta,
+      hoyISO: c2.hoy,
+    }, c2.hoy, c2.objetivos);
+    return Number.isFinite(Number(r && r.debeHaber)) ? r : null;
+  } catch (e) {
+    return null;
+  }
 }
 
 // Qué parte del año fiscal llevas devengada, con el mes en curso contado POR DÍAS.
@@ -330,16 +360,10 @@ function fraccionDelAnioDevengada(c) {
 
 // La reserva que el usuario tiene puesta PARA HACIENDA, no cualquier reserva: si el dinero
 // de "colchón del mes que viene" contara como reserva de impuestos, la pantalla diría que
-// está cubierto cuando no lo está.
-const RE_IMPUESTOS = /impuest|hacienda|irpf|renta|declaraci/i;
-
+// está cubierto cuando no lo está. La regla vive en fiscal.js para que las tres pantallas
+// seleccionen exactamente las mismas reservas.
 function reservaImpuestosDe(objetivos) {
-  const marcadas = objetivos.filter((o) => o.clase === 'reserva' && RE_IMPUESTOS.test(o.nombre));
-  return {
-    importe: marcadas.reduce((acc, o) => acc + o.asignado, 0),
-    hay: marcadas.length > 0,
-    nombres: marcadas.map((o) => o.nombre),
-  };
+  return reservaImpuestosEtiquetada(objetivos);
 }
 
 // ---------------------------------------------------------------------------
@@ -535,16 +559,13 @@ function hitoGastosVida(c) {
 // Los bordes son la unión ordenada de las dos escalas; el tipo de cada tramo, la suma de
 // los dos marginales en ese tramo. Escala autonómica vacía (Cataluña, Andalucía, Valencia
 // van así A PROPÓSITO, el informe no las publica) -> queda solo la estatal, y se avisa.
-function escalaIrpfAgregada(comunidad) {
-  const auto = ESCALAS_AUTONOMICAS[comunidad] || [];
-  const tipoEn = (escala, x) => {
-    const t = escala.find((r) => x <= r.hasta);
-    return t ? t.tipo : 0;
-  };
-  return [...new Set([...ESCALA_ESTATAL, ...auto].map((t) => t.hasta))]
-    .sort((a, b) => a - b)
-    .map((hasta) => ({ hasta, tipo: tipoEn(ESCALA_ESTATAL, hasta) + tipoEn(auto, hasta) }));
-}
+// Vive en residencia.js, que es donde están las dos escalas y sus fuentes. Aquí solo se
+// reexporta el nombre local para no tocar el resto del módulo.
+//
+// Antes esta función era privada de decisiones.js, y por eso el arreglo se quedó a medias:
+// objetivo.js seguía con su tabla propia (19/24/30/37/45/47), que es la que alimenta la
+// pestaña "Hacienda" entera, la reserva de impuestos y la Renta. La app enseñaba las DOS a
+// la vez: "estás en el tramo del 19 %" y "cambio de tramo: del 18 % al 20,5 %".
 
 function hitoTramoIrpf(c) {
   const fijoAnual = (c.modelo.cuotaAutonomo + c.modelo.deducibles) * 12;
@@ -793,14 +814,24 @@ function hitoDubai(c) {
 // Las usan el hito Y la alerta, para que la misma orden no salga con dos números distintos.
 function estadoReservaImpuestos(c) {
   const reserva = reservaImpuestosDe(c.objetivos);
+  // LA cifra del día sale de fiscal.js, que es quien sabe de plazos: los 130 vencidos con su
+  // recargo y el que está a punto de vencer. Antes aquí se prorrateaba el IRPF real del año
+  // y salía la cifra MÁS BAJA de las tres pantallas: obedecerla dejaba el mínimo del día por
+  // cumplido con cientos de euros de menos mientras corría el recargo de un 130 vencido.
+  const caja = c.reservaHacienda;
   // El IRPF de lo FACTURADO, no el del devengado. Ver `irpfDelAnio` en contexto().
-  const debido = Math.max(0, num(c.irpfDelAnio, 0));
-  const devengado = debido * c.fraccionDelAnio;
+  const irpfAnual = Math.max(0, num(c.irpfDelAnio, 0));
+  // El objetivo de fin de año nunca puede ser menor que la caja que ya hace falta hoy: el 130
+  // es un ANTICIPO del 20 % y en su caso adelanta MÁS de lo que su IRPF real acabará siendo.
+  const debido = caja ? Math.max(irpfAnual, caja.debeHaber) : irpfAnual;
+  const devengado = caja ? caja.debeHaber : irpfAnual * c.fraccionDelAnio;
   return {
     reserva,
     debido,
     devengado,
-    // Lo que YA has devengado y no has apartado: el mínimo de hoy.
+    irpfAnual,
+    // Lo que Hacienda te pide tener HOY y no está apartado. Es la MISMA cifra que enseñan
+    // "Hacienda" y "Mi patrimonio".
     minimoHoy: Math.max(0, devengado - reserva.importe),
     // Lo que falta para cubrir el año entero: el objetivo.
     falta: Math.max(0, debido - reserva.importe),
@@ -824,7 +855,26 @@ function accionReservaImpuestos(c) {
   const deDonde = e.disponible >= e.falta
     ? 'No hace falta vender nada: ese dinero ya lo tienes, solo está sin etiquetar.'
     : `Con lo que tienes ahora puedes tapar ${formatoEuros(Math.min(e.disponible, e.falta))}; el resto sale de lo que entre.`;
-  return `Mínimo hoy: ${formatoEuros(e.minimoHoy)}, que es lo que YA has devengado y no está apartado. Objetivo de aquí a fin de año: ${formatoEuros(e.falta)}. ${donde} ${deDonde}`;
+  // De dónde sale el mínimo del día. Es la misma cifra que la pestaña "Hacienda" pone en
+  // grande, así que hay que decir por qué es esa y no el IRPF del año: son los pagos
+  // fraccionados del 130, que es un ANTICIPO del 20 % y no la factura final.
+  const porQue = porQueEseMinimo(c);
+  return `Mínimo hoy: ${formatoEuros(e.minimoHoy)}${porQue} Objetivo de aquí a fin de año: ${formatoEuros(e.falta)}. ${donde} ${deDonde}`;
+}
+
+function porQueEseMinimo(c) {
+  const caja = c.reservaHacienda;
+  if (!caja) return ', que es lo que YA has devengado y no está apartado.';
+  const trozos = [];
+  if (caja.vencidoSinIngresar > 0) {
+    trozos.push(`${formatoEuros(caja.vencidoSinIngresar)} de modelos 130 YA vencidos`
+      + (caja.recargoQueCorre > 0 ? ` más ${formatoEuros(caja.recargoQueCorre)} de recargo que ya corre` : ''));
+  }
+  if (caja.porVencerDevengado > 0 && caja.primeroPorVencer) {
+    trozos.push(`${formatoEuros(caja.porVencerDevengado)} del ${caja.primeroPorVencer.periodo}, que vence el ${caja.primeroPorVencer.fechaLimite}`);
+  }
+  if (!trozos.length) return ', que es lo que YA has devengado y no está apartado.';
+  return `: ${trozos.join(' y ')}. Es la misma cifra que ves en "Hacienda".`;
 }
 
 function hitoReservaImpuestos(c) {
@@ -866,7 +916,14 @@ function hitoReservaImpuestos(c) {
     ventasQueFaltan: alcanzado ? 0 : ventasParaTapar,
     ventasQueFaltanUnidad: 'ventas',
     cubrible,
-    quePasa: `Al ritmo de este año vas a deber ${formatoEuros(debido)} de IRPF. A día de hoy ya llevas devengados ${formatoEuros(devengado)} de esos: ese dinero no es tuyo aunque esté en tu cuenta. Tienes apartados ${formatoEuros(reserva.importe)}.`,
+    // Dos cifras y dos papeles, sin mezclarlos: lo que Hacienda te pide TENER HOY (los pagos
+    // fraccionados del 130, que son un anticipo del 20 %) y lo que de verdad se va a quedar
+    // al cerrar el año (tu IRPF real por tramos). En su caso el anticipo es MAYOR que la
+    // factura, y por eso la Renta le devuelve: decir solo una de las dos confunde.
+    quePasa: `Hacienda te pide tener apartados ${formatoEuros(devengado)} a día de hoy: ese dinero no es tuyo aunque esté en tu cuenta. Tienes apartados ${formatoEuros(reserva.importe)}.`
+      + (e.irpfAnual > 0 && Math.abs(e.irpfAnual - devengado) >= 1
+        ? ` Tu IRPF real de todo el año son ${formatoEuros(e.irpfAnual)}: los 130 son un anticipo del 20 % y lo que sobre vuelve en la Renta.`
+        : ''),
     situacion: alcanzado
       ? 'Está cubierto el año entero. No toques esa reserva para nada más.'
       : (cubrible

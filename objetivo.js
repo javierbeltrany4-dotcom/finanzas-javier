@@ -450,6 +450,20 @@ export function modeloDesdeDatos(datos, base = MODELO_DEFAULT, opciones) {
 //
 // Escala general estatal + autonómica agregada. Las comunidades cambian su mitad,
 // así que esto aproxima: sirve para decidir, no para liquidar.
+//
+// OJO, HAY UNA SEGUNDA ESCALA VIVA EN LA APP Y NO DICEN LO MISMO. `escalaIrpfAgregada()`
+// (residencia.js) construye la estatal + la autonómica de Madrid tramo a tramo y da 18 % en
+// el primer escalón, no 19 %, y además tiene los bordes autonómicos (13.362,22 · 19.004,63 ·
+// 35.425,68 · 57.320,40) que esta tabla no tiene. De ahí salen dos cosas que él ve a la vez:
+//   · "Estás en el tramo del 19 %"            <- esta tabla (pestaña "Cuánto facturar")
+//   · "Cambio de tramo: del 18 % al 20,5 %"   <- la agregada (pestaña "Y ahora qué")
+// Y tres IRPF distintos para la misma base: 358,38 (esta), 287,73 (esta menos el 5 % de
+// difícil justificación) y 304,95 (residencia.js, con el mínimo autonómico de Madrid).
+//
+// NO SE HA UNIFICADO A PROPÓSITO: hacerlo mueve el IRPF del año de 366,63 € -que es la cifra
+// VERIFICADA del caso, con su tramo del 19 %- a ~339 €, y reescribe las cifras ancla de 44
+// tests. Es una decisión de criterio fiscal (¿la escala estatal agregada o la de Madrid con
+// su mínimo propio?), no un arreglo mecánico, y hay que tomarla con el informe delante.
 export const TRAMOS_IRPF = [
   { hasta: 12450, tipo: 19 },
   { hasta: 20200, tipo: 24 },

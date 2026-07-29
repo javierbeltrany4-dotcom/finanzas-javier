@@ -10,6 +10,10 @@ import { renderObjetivo as renderVistaObjetivo, bindObjetivo } from './vista-obj
 import * as R from './residencia.js';
 import { renderResidencia, bindResidencia } from './vista-residencia.js';
 import { renderDecisiones, bindDecisiones } from './vista-decisiones.js';
+import * as FIS from './fiscal.js';
+import { renderFiscal, bindFiscal } from './vista-fiscal.js';
+import { renderCapital, bindCapital } from './vista-capital.js';
+import { renderCrecimiento, bindCrecimiento } from './vista-crecimiento.js';
 import * as RESP from './respaldo.js';
 import * as SYNC from './sync.js';
 
@@ -24,6 +28,20 @@ const DUBAI_KEY = 'dubai-v1';
 const OBJETIVO_KEY = 'objetivo-limpio-v1';
 // Ajustes de la pestaña "Dónde vivir" (comunidad, costes, sueldo de administrador).
 const RESIDENCIA_KEY = 'residencia-v1';
+// Pestaña "Hacienda". Dos cosas distintas y por eso dos claves:
+//   · lo que ya ha PRESENTADO ante la AEAT: [{ modelo, periodo, anio, fecha, importe }]
+//   · lo que ya ha COMPROBADO él (el checklist del apartado 2 del informe): { id: true }
+// Ninguna de las dos viaja en la copia de seguridad ni en la sincronización, y es a
+// propósito: `estadoLocal()` tiene la forma exacta que valida respaldo.js, y meter aquí
+// campos que ese validador no conoce los tiraría en silencio en el primer viaje de ida y
+// vuelta. Son datos de este dispositivo, como las credenciales del Apps Script.
+const FISCAL_PRESENTADOS_KEY = 'fiscal-presentados-v1';
+const FISCAL_CHECKLIST_KEY = 'fiscal-checklist-v1';
+// Los tres datos de la Renta que la app no puede saber sola y que él sí puede escribir: el
+// mínimo personal de su comunidad, las reducciones de la base (plan de pensiones) y los gastos
+// deducibles que no están en la hoja. { minimoPersonal?, reducciones?, otrosGastos? }.
+// Una clave AUSENTE significa "no lo sé" y renta.js lo dice con su aviso; un 0 significa cero.
+const FISCAL_RENTA_KEY = 'fiscal-renta-v1';
 // Credenciales de la sincronización: { url, clave }. SOLO en este dispositivo.
 // La clave es un secreto: no viaja en "Exportar datos.json" ni en la copia de seguridad.
 const SYNC_KEY = 'sync-v1';
@@ -226,9 +244,93 @@ function getResidencia() {
   const guardado = leerJSON(RESIDENCIA_KEY) || (config && config.config && config.config.residencia) || {};
   return conHorquillaDubai(R.normalizarOpciones(guardado), guardado);
 }
+
+// Las opciones del comparador de países CON su cuota de autónomo real metida dentro.
+//
+// POR QUÉ EXISTE: el comparador cobra por defecto la cuota del tramo del RETA (2.717,63 €/año),
+// que es la foto de cuando se acabe la tarifa plana. Él paga 960 €/año HOY. Las pantallas que
+// dicen "lo que tienes hoy" comparaban contra una España que no existe: el ranking coronaba a
+// Paraguay (+1.379 €/año, etiqueta "GANA AHORA") mientras "Crecer" decía que mudarse le CUESTA
+// dinero. Dos respuestas opuestas a la misma pregunta, y la equivocada era el titular de la
+// pantalla que abre la app.
+//
+// Y va SEPARADO de `getResidencia()` a propósito: eso es lo que se guarda y se sincroniza, y
+// esto es un valor DERIVADO del modelo del negocio. Persistirlo lo congelaría, y el día que
+// cambie la cuota el comparador seguiría con la vieja sin que nadie se enterase.
+function opcionesResidenciaVivas() {
+  const base = getResidencia();
+  const cuotaSuya = numOr(modeloVivo().modelo.cuotaAutonomo, 0) * 12;
+  return cuotaSuya > 0 ? { ...base, cuotaAutonomoAnual: cuotaSuya } : base;
+}
 function setResidencia(o) {
   localStorage.setItem(RESIDENCIA_KEY, JSON.stringify(conHorquillaDubai(R.normalizarOpciones(o), o)));
   marcarCambio();
+}
+
+// ---------- Hacienda: lo presentado y lo comprobado ----------
+//
+// Ojo a lo que NO se hace aquí: no se llama a `marcarCambio()`. Esa marca decide quién gana
+// al fusionar con la hoja de Google, y estos dos datos no viajan en `estadoLocal()`. Sellar
+// el dispositivo como "el más nuevo" por marcar una casilla que la hoja nunca va a ver haría
+// que este dispositivo machacara la hoja buena sin aportar nada a cambio.
+
+function getFiscalChecklist() {
+  const o = leerJSON(FISCAL_CHECKLIST_KEY);
+  return o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+}
+function setFiscalChecklist(x) {
+  localStorage.setItem(FISCAL_CHECKLIST_KEY, JSON.stringify(x && typeof x === 'object' ? x : {}));
+}
+
+function getFiscalPresentados() {
+  const o = leerJSON(FISCAL_PRESENTADOS_KEY);
+  return Array.isArray(o) ? o : [];
+}
+function setFiscalPresentados(lista) {
+  localStorage.setItem(FISCAL_PRESENTADOS_KEY, JSON.stringify(Array.isArray(lista) ? lista : []));
+}
+
+function getFiscalRenta() {
+  const o = leerJSON(FISCAL_RENTA_KEY);
+  return o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+}
+function setFiscalRenta(x) {
+  localStorage.setItem(FISCAL_RENTA_KEY, JSON.stringify(x && typeof x === 'object' ? x : {}));
+}
+
+// El ctx que entiende fiscal.js. Es un módulo puro: no mira el reloj, no lee localStorage y
+// no sabe de dónde salen los datos, así que todo eso entra por aquí.
+//
+// `roi` sale del checklist y solo puede valer `true` o `null`. Marcar la casilla del VIES es
+// la única forma que tiene la app de saber que SÍ está dado de alta; sin marcar va `null`,
+// que significa "no lo sabemos" y es la verdad. Nunca `false`: la app no puede afirmar que
+// NO está en el ROI sin haberlo mirado, y esa afirmación cambiaría el color de media pantalla.
+function ctxFiscalPuro() {
+  const mv = modeloVivo();
+  const checklist = getFiscalChecklist();
+  return {
+    datos,
+    modelo: mv.modelo,
+    hoyISO: hoyISO(),
+    presentados: getFiscalPresentados(),
+    roi: checklist.roi === true ? true : null,
+  };
+}
+
+// El ctx de la VISTA: lo de arriba más lo que la pantalla necesita por su cuenta (el
+// patrimonio, para poder decir si la reserva de impuestos llega, y el checklist para pintarlo).
+function ctxFiscal() {
+  return {
+    ...ctxFiscalPuro(),
+    checklist: getFiscalChecklist(),
+    // Los ajustes de la Renta. Van SOLO en el ctx de la vista y no en `ctxFiscalPuro`: fiscal.js
+    // no los conoce ni los necesita, y colarle un campo que no está en su contrato es como se
+    // empiezan a filtrar responsabilidades de un módulo a otro.
+    renta: getFiscalRenta(),
+    patrimonio: getPatrimonio(),
+    f,
+    card,
+  };
 }
 
 // ---------- El estado del usuario: copia, sincronización y marca de tiempo ----------
@@ -438,7 +540,7 @@ function renderVerificacion(destino = 'verificacion', compacto = false) {
     const plural = desconocidos.length > 1;
     ambar = `<div class="aviso-ambar">${ICON_WARN}<span><strong>${desconocidos.length} concepto${plural ? 's' : ''} de retiro sin clasificar:</strong> ${desconocidos.map(esc).join(', ')}.
       No sé si tributan, así que cuenta${plural ? 'n' : ''} <strong>0 €</strong> de IRPF y el neto real puede estar inflado.
-      <span class="mc">Clasifícalo${plural ? 's' : ''} en <strong>Editar datos</strong>: conceptos que tributan (banco) o que no tributan (cripto).</span></span></div>`;
+      <span class="mc">Clasifícalo${plural ? 's' : ''} en <strong>Editar datos</strong>: es solo la etiqueta del canal de cobro (banco o cripto). Tributar, tributan los dos igual.</span></span></div>`;
   }
   cont.innerHTML = stale + badge + ambar + (compacto ? '' : `<div class="vchecks">${checks}</div>`);
 }
@@ -458,7 +560,7 @@ function pintarLineaIrpf(disponible) {
     hero.appendChild(linea);
   }
   const impuesto = disponible * (pct / 100);
-  linea.innerHTML = `Si lo sacas por transferencia bancaria, IRPF <strong>−${f(impuesto)}</strong> (${pct}%): te quedarían <span class="neto">${f(disponible - impuesto)}</span>. Por cripto no tributa aquí.`;
+  linea.innerHTML = `IRPF <strong>−${f(impuesto)}</strong> (${pct}%): te quedarían <span class="neto">${f(disponible - impuesto)}</span>. Da igual el canal: por transferencia o en cripto, tributa lo mismo.`;
 }
 
 function renderResumen() {
@@ -626,7 +728,7 @@ function renderRetiros() {
   document.getElementById('retiros-totales').innerHTML = [
     card(`${res.n} retiro${res.n === 1 ? '' : 's'}`, `<span class="num">${f(res.bruto)}</span>`, 'bruto del negocio (100%)'),
     card('Mi 40%', `<span class="num pos">${f(res.miBruto)}</span>`, 'mi parte, antes de impuestos'),
-    card('IRPF', `<span class="num col-irpf">${f(res.irpf)}</span>`, 'solo de los retiros por banco'),
+    card('IRPF', `<span class="num col-irpf">${f(res.irpf)}</span>`, 'de todos mis retiros, banco y cripto'),
     card('Neto real', `<span class="num ${res.miNeto >= 0 ? 'pos' : 'neg'}">${f(res.miNeto)}</span>`, 'lo que me queda tras Hacienda'),
   ].join('');
 
@@ -639,20 +741,14 @@ function renderRetiros() {
     if (filtro === 'yo') { imp = yo; rep = 'Yo (40%)'; }
     else if (filtro === 'david') { imp = david; rep = 'David (60%)'; }
     else { imp = r.total; rep = `Yo ${f(yo)} · David ${f(david)}`; }
-    // Cripto no tributa: va un guion, no un 0,00 € (que se leería como "ya calculado").
-    // Desconocido: no se adivina, se marca con "?" en ámbar hasta que se clasifique.
+    // TRIBUTA TODO, venga por donde venga. El concepto solo dice el CANAL de cobro: es
+    // autónomo español facturando a la GmbH de su socio, así que cobrar en cripto es
+    // rendimiento de actividad económica igual (arts. 28.1 y 43 LIRPF). Antes esta columna
+    // pintaba "—" en los de cripto y dejaba 1.572,80 € de 5.372,80 € con cara de exentos,
+    // mientras la pestaña "Hacienda" los metía enteros en la base del 130 y del 349.
     const clase = C.clasificarRetiro(r, irpfCfg);
-    let tdIrpf, tdNeto;
-    if (clase === 'banco') {
-      tdIrpf = `<td class="num col-irpf">−${f(C.irpfDeRetiro(r, irpfCfg, sp))}</td>`;
-      tdNeto = `<td class="num pos">${f(C.miNetoDeRetiro(r, irpfCfg, sp))}</td>`;
-    } else if (clase === 'cripto') {
-      tdIrpf = '<td class="num" style="color:var(--dim)" title="Cripto: no tributa aquí">—</td>';
-      tdNeto = `<td class="num">${f(yo)}</td>`;
-    } else {
-      tdIrpf = '<td class="num" style="color:var(--amber)" title="Concepto sin clasificar">?</td>';
-      tdNeto = '<td class="num" style="color:var(--amber)" title="Sin saber si tributa, no se puede calcular">?</td>';
-    }
+    const tdIrpf = `<td class="num col-irpf">−${f(C.irpfDeRetiro(r, irpfCfg, sp))}</td>`;
+    const tdNeto = `<td class="num pos">${f(C.miNetoDeRetiro(r, irpfCfg, sp))}</td>`;
     filas += `<tr><td>${r.fecha}</td><td class="num">${f(imp)}</td><td>${rep}</td>${tdIrpf}${tdNeto}<td class="num">${f(caja2)}</td></tr>`;
   });
   if (!filas) filas = '<tr><td colspan="6" class="vacio">Sin retiros con estos filtros.</td></tr>';
@@ -660,7 +756,7 @@ function renderRetiros() {
   const listaCripto = (irpfCfg.conceptosCripto || []).join(', ') || '—';
   document.getElementById('tabla-retiros').innerHTML =
     `<table><thead><tr><th>Fecha</th><th class="num">Importe</th><th>Reparto</th><th class="num col-irpf">IRPF</th><th class="num">Neto real (mío)</th><th class="num">Caja restante (contable)</th></tr></thead><tbody>${filas}</tbody></table>
-     <p class="mc" style="padding:12px 18px 2px">El <strong>IRPF</strong> (${Number(irpfCfg.porcentaje) || 0}%) se calcula sobre mi 40% y solo en los retiros por transferencia (${esc(listaBanco)}). Los de cripto (${esc(listaCripto)}) llevan "—" porque no tributan aquí. Un "?" es un concepto sin clasificar: revísalo en "Editar datos".</p>`;
+     <p class="mc" style="padding:12px 18px 2px">El <strong>IRPF</strong> (${Number(irpfCfg.porcentaje) || 0}%) se calcula sobre mi 40% de <strong>todos</strong> los retiros. El concepto solo dice por dónde entró el dinero —banco (${esc(listaBanco)}) o cripto (${esc(listaCripto)})—, y eso no cambia lo que tributas: facturas a una empresa alemana, así que todo es rendimiento de actividad económica (arts. 28.1 y 43 LIRPF) y todo cuenta para el modelo 130.</p>`;
 }
 
 // ---------- MI DINERO ----------
@@ -699,7 +795,7 @@ function renderMiDinero() {
 
   let aviso = '';
   if (!huboRetiro) {
-    aviso = `<div class="alerta">${ICON_WARN}<span>Este mes <strong>no retiraste nada</strong> (reinversión en el negocio). Tus gastos fijos (${f(gastos)}) salen de tu cuenta bancaria, no del negocio. Tu beneficio generado (${f(miParte)}) sigue en la caja y todavía no tributa: el IRPF llega cuando lo saques por transferencia.</span></div>`;
+    aviso = `<div class="alerta">${ICON_WARN}<span>Este mes <strong>no retiraste nada</strong> (reinversión en el negocio). Tus gastos fijos (${f(gastos)}) salen de tu cuenta bancaria, no del negocio. Tu beneficio generado (${f(miParte)}) sigue en la caja y todavía no tributa: el IRPF llega cuando lo saques, por el canal que sea.</span></div>`;
   } else if (ahorro >= 0) {
     aviso = `<div class="alerta ok">${ICON_OK}<span>Este mes retiraste ${f(ar.miBruto)}; tras Hacienda y tus gastos fijos te quedan <strong>${f(ahorro)}</strong> de ahorro real.<span class="mc">${desglose}</span></span></div>`;
   } else {
@@ -756,7 +852,7 @@ function renderMiDinero() {
   if (!filas) filas = '<tr><td colspan="6" class="vacio">Sin datos todavía.</td></tr>';
   document.getElementById('midinero-tabla').innerHTML =
     `<table><thead><tr><th>Mes</th><th class="num">Mi beneficio (40%)</th><th class="num">Mi retiro</th><th class="num col-irpf">IRPF</th><th class="num">Gastos fijos</th><th class="num">Ahorro real</th></tr></thead><tbody>${filas}</tbody></table>
-     <p class="mc" style="padding:12px 18px 2px">El <strong>ahorro real</strong> = lo que retiraste ese mes − el <strong>IRPF</strong> de esos retiros − tus gastos fijos: el dinero que de verdad te llevaste a casa. Solo tributan los retiros por transferencia; los de cripto llevan "—" en la columna de IRPF. No depende del beneficio del negocio de ese mes (puedes retirar de meses anteriores). Por eso mayo, aun siendo mal mes para el negocio, tiene ahorro alto: hiciste un reparto grande.</p>`;
+     <p class="mc" style="padding:12px 18px 2px">El <strong>ahorro real</strong> = lo que retiraste ese mes − el <strong>IRPF</strong> de esos retiros − tus gastos fijos: el dinero que de verdad te llevaste a casa. Tributan todos los retiros, cobres por transferencia o en cripto. No depende del beneficio del negocio de ese mes (puedes retirar de meses anteriores). Por eso mayo, aun siendo mal mes para el negocio, tiene ahorro alto: hiciste un reparto grande.</p>`;
 }
 
 // ---------- CALENDARIO ----------
@@ -772,14 +868,11 @@ function eventosDeFecha(iso) {
     evs.push({ tipo: 'retiro', txt: `Retiro ${f(r.total)}` });
     evs.push({ tipo: 'mio', txt: `mi 40%: ${f(C.miParteDe(r.total, sp))}` });
     // El retiro ya se cobró: aquí el IRPF es real, no una estimación.
-    const clase = C.clasificarRetiro(r, cfg);
-    if (clase === 'banco') {
-      evs.push({ tipo: 'gasto', txt: `IRPF −${f(C.irpfDeRetiro(r, cfg, sp))}` });
-      evs.push({ tipo: 'mio', txt: `neto: ${f(C.miNetoDeRetiro(r, cfg, sp))}` });
-    } else if (clase === 'cripto') {
-      evs.push({ tipo: 'mio', txt: 'sin IRPF (cripto)' });
-    } else {
-      evs.push({ tipo: 'gasto', txt: 'sin clasificar' }); // .ev.gasto va en ámbar
+    // Tributa igual venga por banco o por cripto: el canal no cambia la tributación.
+    evs.push({ tipo: 'gasto', txt: `IRPF −${f(C.irpfDeRetiro(r, cfg, sp))}` });
+    evs.push({ tipo: 'mio', txt: `neto: ${f(C.miNetoDeRetiro(r, cfg, sp))}` });
+    if (C.clasificarRetiro(r, cfg) === 'desconocido') {
+      evs.push({ tipo: 'gasto', txt: 'canal sin clasificar' }); // .ev.gasto va en ámbar
     }
   });
   return evs;
@@ -948,42 +1041,44 @@ function abrirDetalleDia(iso) {
     html += `<div class="dia-seccion"><h4>Retiros (${retiros.length})</h4>` +
       retiros.map((r) => {
         // Aquí sí hay retiro: el IRPF es el real de ese movimiento, no una estimación.
+        // Tributa igual por banco que por cripto; el canal solo se nombra como origen.
         const clase = C.clasificarRetiro(r, cfg);
-        const miParteRet = C.miParteDe(r.total, sp);
-        let sub, mio;
-        if (clase === 'banco') {
-          sub = `yo 40% · IRPF −${f(C.irpfDeRetiro(r, cfg, sp))}`;
-          mio = `<span class="mio pos">${f(C.miNetoDeRetiro(r, cfg, sp))}</span>`;
-        } else if (clase === 'cripto') {
-          sub = 'yo 40% · sin IRPF (cripto)';
-          mio = `<span class="mio">${f(miParteRet)}</span>`;
-        } else {
-          sub = 'yo 40% · sin clasificar';
-          mio = `<span class="mio" style="color:var(--amber)">${f(miParteRet)} ?</span>`;
-        }
+        const canal = clase === 'desconocido' ? ' · canal sin clasificar' : '';
+        const sub = `yo 40% · IRPF −${f(C.irpfDeRetiro(r, cfg, sp))}${canal}`;
+        const mio = `<span class="mio pos">${f(C.miNetoDeRetiro(r, cfg, sp))}</span>`;
         return `<div class="dia-linea"><span class="cpt">${esc(r.concepto || 'Retiro')}<small>${sub}</small></span><span class="imp">${f(r.total)}</span>${mio}</div>`;
       }).join('') + '</div>';
   }
   if (!ventas.length && !gastos.length && !retiros.length) {
     html += '<p class="mc">Sin movimientos este día.</p>';
   }
-  html += `<p class="nota">Columna derecha = tu parte (40%); en los retiros por banco, ya con el IRPF descontado. La línea <strong>Tras IRPF</strong> del resumen es una <strong>estimación</strong>: este beneficio sigue en la caja del negocio y no tributa hasta que lo retires por transferencia.</p></div>`;
+  html += `<p class="nota">Columna derecha = tu parte (40%), ya con el IRPF descontado, cobres por banco o en cripto. La línea <strong>Tras IRPF</strong> del resumen es una <strong>estimación</strong>: ese beneficio sigue en la caja del negocio y no tributa hasta que lo retires.</p></div>`;
 
   document.getElementById('modal-dia-contenido').innerHTML = html;
   document.getElementById('modal-dia').classList.remove('oculto');
 }
 
-// El ctx completo de "Y ahora qué". decisiones.js es un módulo puro: no mira el reloj, no
-// lee localStorage y no sabe de dónde salen los datos. Todo entra por aquí.
+// EL ctx del negocio. Uno solo para las tres pantallas que razonan sobre él: "Y ahora qué"
+// (decisiones.js), "Mi capital" (capital.js) y "Crecer" (crecimiento.js). Los tres módulos
+// son puros -no miran el reloj, no leen localStorage y no saben de dónde salen los datos- y
+// los tres declaran EL MISMO contrato de entrada a propósito: si cada pantalla se montara su
+// propio contexto, las tres dirían tres cifras distintas del mismo negocio, que es
+// exactamente el bug que costó la nota larga de `rentaAnualViva`.
 //
-// `datos` viaja con un `config` dentro porque es donde decisiones.js busca el reparto 40/60
-// y los gastos fijos si no le llegan por otro lado; se le pasan además sueltos para que
+// `datos` viaja con un `config` dentro porque es donde estos módulos buscan el reparto 40/60
+// y los gastos fijos si no les llegan por otro lado; se les pasan además sueltos para que
 // manden los del usuario. `tarifaPlana` sale de la config: el mes de alta en el RETA no
 // está en ningún otro sitio de la app, y sin él ese hito lo dice en vez de inventárselo.
-function ctxDecisiones() {
+//
+// `presentados` y `roi` son para capital.js, que le pide a fiscal.js cuánto hay que tener
+// guardado hoy. Sin ellos ese módulo daría por no presentado todo lo que él ya ha marcado en
+// la pestaña "Hacienda", y "cuánto tengo libre" saldría más bajo de lo que es. Van en el ctx
+// común y no en un tercero porque decisiones.js los ignora sin enterarse.
+function ctxNegocio() {
   const mv = modeloVivo();
   const hoy = hoyISO();
   const gastosFijos = getGastos();
+  const checklist = getFiscalChecklist();
   return {
     beneficioAnual: rentaAnualViva(mv),
     datos: {
@@ -996,22 +1091,49 @@ function ctxDecisiones() {
     },
     modelo: mv.modelo,
     ventasMedia: mv.ventasMedia,
-    // DOS fotos fiscales, y no son intercambiables:
-    //   · `rentaFiscal` es lo que FACTURA (los retiros) y es la que manda para TODO lo que
-    //     sea impuestos: es lo único por lo que tributa un autónomo que factura a la empresa
-    //     de su socio. De aquí sale el IRPF de la reserva y el techo de la tarifa plana.
-    //   · `situacionFiscal` es lo DEVENGADO (su 40 % del beneficio del negocio) y se queda
-    //     como informativo: mide el tamaño del negocio y de ahí salen los meses
-    //     transcurridos del año. No se usa para calcular ni un euro de impuesto.
+    // `rentaFiscal` es lo que FACTURA (los retiros) y es la que manda para TODO lo que sea
+    // impuestos: es lo único por lo que tributa un autónomo que factura a la empresa de su
+    // socio. De aquí sale el IRPF de la reserva y el techo de la tarifa plana.
     rentaFiscal: rentaFiscalViva(mv, hoy),
-    situacionFiscal: O.situacionFiscalDelAnio(datos, mv.modelo, hoy),
     patrimonio: getPatrimonio(),
-    residencia: getResidencia(),
+    // Con su cuota de autónomo real dentro: "Y ahora qué" y "Crecer" comparan países contra
+    // la España de HOY, no contra la de cuando se le acabe la tarifa plana.
+    residencia: opcionesResidenciaVivas(),
     gastosFijos,
     tarifaPlana: (config && config.config && config.config.tarifaPlana) || {},
+    presentados: getFiscalPresentados(),
+    roi: checklist.roi === true ? true : null,
+    // LA reserva de Hacienda del día. Se calcula UNA vez, aquí, y viaja igual a "Y ahora qué",
+    // a "Mi capital" y a "Mi patrimonio". Antes cada pantalla la sacaba por su cuenta y la
+    // pregunta "¿cuánto meto hoy en la reserva de impuestos?" tenía tres respuestas, con la
+    // más baja justo en la pestaña que abre la app.
+    reservaHacienda: FIS.reservaImpuestosHoy(ctxFiscalPuro(), hoy, (getPatrimonio() || {}).objetivos || []),
     hoyISO: hoy,
     f,
     card,
+  };
+}
+
+// El ctx completo de "Y ahora qué": el del negocio más las dos cosas que solo necesita esa
+// pantalla.
+function ctxDecisiones() {
+  const mv = modeloVivo();
+  const hoy = hoyISO();
+  return {
+    ...ctxNegocio(),
+    // La segunda foto fiscal. `situacionFiscal` es lo DEVENGADO (su 40 % del beneficio del
+    // negocio) y se queda como informativo: mide el tamaño del negocio y de ahí salen los
+    // meses transcurridos del año. No se usa para calcular ni un euro de impuesto.
+    situacionFiscal: O.situacionFiscalDelAnio(datos, mv.modelo, hoy),
+    // Las alertas de Hacienda, ya calculadas. Van aquí y no dentro de decisiones.js a
+    // propósito: decisiones.js es un módulo puro con su propio contrato y sus seis alertas
+    // fijas, y esto es una lista de longitud variable que depende de qué día es hoy.
+    //
+    // Pero tienen que verse en ESTA pantalla, que es la que abre la app: un modelo 130
+    // vencido no puede quedarse esperando a que le apetezca entrar en la pestaña de
+    // Hacienda, porque el recargo corre igual. La vista las pinta arriba del todo y pone el
+    // semáforo en rojo si hay algo vencido.
+    alertasFiscales: FIS.alertasFiscales(ctxFiscalPuro(), hoy),
   };
 }
 
@@ -1023,27 +1145,41 @@ function renderVista(v) {
     // porque decisiones.js y su vista son puros y no saben de dónde vienen los datos.
     renderVerificacion('verificacion-dec', true);
     renderDecisiones(ctxDecisiones());
-  } else if (v === 'resumen') renderResumen();
+  } else if (v === 'fiscal') renderFiscal(ctxFiscal());
+  else if (v === 'resumen') renderResumen();
   else if (v === 'historico') renderHistorico();
   else if (v === 'retiros') renderRetiros();
   else if (v === 'midinero') renderMiDinero();
   else if (v === 'calendario') renderCalendario();
   else if (v === 'patrimonio') {
     const mv = modeloVivo();
+    const patr = getPatrimonio();
     renderPatrimonio({
-      patrimonio: getPatrimonio(),
+      patrimonio: patr,
       retiros: datos.retiros,
       gastosFijosTotal: C.gastoFijoMensual(getGastos()),
       irpfCfg: getIrpf(),
       split,
       f,
       card,
-      // La reserva de impuestos que ya había usa el IRPF PLANO de los retiros hechos.
-      // Con esto la vista puede ofrecer además el REAL, el de tramos, sobre las ventas
-      // medias del negocio: es el número que dice si hay que apartar o si devuelven.
-      modeloObjetivo: mv.modelo,
-      ventasMedia: mv.ventasMedia,
+      // LA reserva de Hacienda, la misma que "Hacienda" y que "Y ahora qué": sale de
+      // fiscal.js, que es el único módulo que sabe de PLAZOS y de recargos. Antes esta
+      // pantalla se la calculaba por su cuenta de DOS formas -el 20 % plano de lo retirado y
+      // el IRPF por tramos del DEVENGADO- y ninguna coincidía con las otras pantallas: la
+      // misma pregunta salía con tres respuestas el mismo día, y esta daba además un aviso
+      // verde de "no reserves nada" pegado a un botón de "reserva 760 €".
+      reservaHacienda: FIS.reservaImpuestosHoy(ctxFiscalPuro(), hoyISO(), (patr && patr.objetivos) || []),
+      // La foto fiscal buena, la de lo FACTURADO. El devengado (su 40 % del beneficio del
+      // negocio, lo facture o no) no se usa aquí para calcular ni un euro de impuesto.
+      rentaFiscal: rentaFiscalViva(mv, hoyISO()),
     });
+  } else if (v === 'capital') {
+    // El MISMO ctx que "Y ahora qué" y que "Crecer". capital.js le pide a fiscal.js el dinero
+    // de Hacienda por dentro, así que aquí no se calcula ni un impuesto: solo se le pasan los
+    // datos, el patrimonio, lo ya presentado y qué día es hoy.
+    renderCapital(ctxNegocio());
+  } else if (v === 'crecimiento') {
+    renderCrecimiento(ctxNegocio());
   } else if (v === 'objetivo') {
     const mv = modeloVivo();
     renderVistaObjetivo({
@@ -1068,7 +1204,9 @@ function renderVista(v) {
       // devengado viaja aparte para que la pantalla pueda decirlo en voz alta.
       beneficioAnual: rf.retiradoProyectado,
       devengadoAnual: rf.transcurrido > 0 ? (rf.devengadoYtd / rf.transcurrido) * 12 : 0,
-      opciones: getResidencia(),
+      // Con su cuota de autónomo real dentro: el ranking tiene que ordenar la España de HOY,
+      // que es la que lleva la etiqueta "lo que tienes hoy".
+      opciones: opcionesResidenciaVivas(),
       // El modelo del negocio viaja para poder traducir los umbrales a ventas al mes, que
       // es lo único de todo esto que él controla de verdad. Sin él la vista se calla esa
       // línea en vez de inventarse una equivalencia.
@@ -1118,7 +1256,16 @@ function rentaAnualViva(mv) {
 }
 function cambiarVista(v) {
   vistaActiva = v;
-  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('activa', t.dataset.vista === v));
+  document.querySelectorAll('.tab').forEach((t) => {
+    const activa = t.dataset.vista === v;
+    t.classList.toggle('activa', activa);
+    // Con doce pestañas en dos filas con scroll, la que se acaba de pulsar puede quedarse
+    // medio tapada por el borde. Se centra sola: el guard no es paranoia, en los tests el
+    // DOM es de mentira y no tiene scrollIntoView.
+    if (activa && typeof t.scrollIntoView === 'function') {
+      try { t.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch (e) { /* da igual */ }
+    }
+  });
   document.querySelectorAll('.vista').forEach((s) => s.classList.toggle('activa', s.id === `v-${v}`));
   renderVista(v);
 }
@@ -1527,6 +1674,33 @@ function bind() {
   bindDecisiones({
     irA: (v) => cambiarVista(v),
     rerender: () => renderVista('decisiones'),
+  });
+  // Hacienda: igual, una sola vez (bindFiscal también se protege con dataset).
+  //
+  // Solo se repinta esta pestaña, y basta: "Y ahora qué" está oculta mientras él está aquí, y
+  // `cambiarVista` la vuelve a pintar entera -con el ctx recién leído de localStorage- en
+  // cuanto la abre. Lo que marque aquí llega allí; no hay dos copias del estado.
+  bindFiscal({
+    getChecklist: getFiscalChecklist,
+    setChecklist: setFiscalChecklist,
+    getPresentados: getFiscalPresentados,
+    setPresentados: setFiscalPresentados,
+    getRenta: getFiscalRenta,
+    setRenta: setFiscalRenta,
+    irA: (v) => cambiarVista(v),
+    rerender: () => renderVista('fiscal'),
+  });
+  // Mi capital: el simulador guarda lo tecleado dentro de la vista (es un tanteo, no un dato
+  // suyo: no viaja a localStorage ni a la hoja de Google), así que aquí solo hacen falta el
+  // salto de pestaña y el repintado. bindCapital también se protege con dataset.
+  bindCapital({
+    irA: (v) => cambiarVista(v),
+    rerender: () => renderVista('capital'),
+  });
+  // Crecer: igual. El plegado de la estacionalidad lo hace <details> por su cuenta.
+  bindCrecimiento({
+    irA: (v) => cambiarVista(v),
+    rerender: () => renderVista('crecimiento'),
   });
   document.getElementById('cal-mes').addEventListener('change', renderCalendario);
   document.getElementById('cal-fecha').addEventListener('change', renderCalendario);
