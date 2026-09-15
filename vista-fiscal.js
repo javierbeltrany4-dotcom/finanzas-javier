@@ -36,6 +36,7 @@ import {
   SANCIONES,
   cuantoApartar,
   vencimientosAbiertos,
+  importeModelo130,
 } from './fiscal.js';
 
 import {
@@ -446,6 +447,7 @@ function prepararCtx(ctx) {
   // pudieran volver a llamarle por su cuenta, dos bloques de la misma página acabarían
   // pidiendo la misma cuenta con contextos distintos y enseñando dos cifras.
   return {
+    ctxFiscal,
     modelo,
     hoy,
     anio,
@@ -1373,6 +1375,34 @@ function pintarPendiente(c) {
 // ---------------------------------------------------------------------------
 
 // ctx = { datos, modelo, hoyISO, presentados, roi, patrimonio, checklist, f, card }
+// El 130 de ESTE trimestre, claro y sin drama: lo que pagas ahora.
+function pintar130Hero(c) {
+  const { f } = c;
+  if (!c.hoy) return '';
+  const t = Math.ceil(Number(c.hoy.slice(5, 7)) / 3);
+  const r = importeModelo130(c.ctxFiscal, `${t}T`);
+  const MES_PAGO = { 1: 'abril', 2: 'julio', 3: 'octubre', 4: 'enero (del año siguiente)' };
+  const deducido = (r.gastosDeduciblesAcumulados || 0) > 0;
+  return `<div class="fis-big rojo">
+    <span class="num">${esc(euros(f, r.aIngresar || 0))}</span>
+    <small>IRPF de este trimestre (modelo 130) · se paga en ${MES_PAGO[t]}, del 1 al 20</small>
+  </div>
+  <p class="fis-porque">Es el <strong>20 %</strong> de lo que has <strong>facturado en Contasimple</strong> este trimestre${deducido ? ', menos tus gastos deducibles' : ' (sin deducir nada; puedes activar los deducibles en la pestaña Gastos)'}. Lo que entra en <strong>cripto no cuenta</strong>.${r.proyectado ? ' Aún puede cambiar si facturas más antes de que cierre el trimestre.' : ''}</p>`;
+}
+
+// Los cuatro trimestres del año de un vistazo.
+function pintar4Trimestres(c) {
+  const { f, card } = c;
+  if (!c.hoy) return '';
+  const tHoy = Math.ceil(Number(c.hoy.slice(5, 7)) / 3);
+  const cards = [1, 2, 3, 4].map((t) => {
+    const r = importeModelo130(c.ctxFiscal, `${t}T`);
+    const estado = t < tHoy ? 'cerrado' : (t === tHoy ? 'en curso' : 'por venir');
+    return card(`${t}T`, `<span class="num">${esc(euros(f, r.aIngresar || 0))}</span>`, `130 · ${estado}`);
+  }).join('');
+  return `<div class="grid grid-4">${cards}</div>`;
+}
+
 export function renderFiscal(ctx) {
   const c = prepararCtx(ctx);
 
@@ -1381,13 +1411,12 @@ export function renderFiscal(ctx) {
   const raiz = document.getElementById('v-fiscal');
   if (raiz) raiz.dataset.hoy = c.hoy;
 
-  set('fis-urgente', pintarUrgente(c));
-  set('fis-apartar', pintarApartar(c));
-  set('fis-renta', pintarRenta(c));
-  set('fis-calendario', pintarCalendario(c));
-  set('fis-modelos', pintarModelos(c));
-  set('fis-preguntas', pintarPreguntas(c));
-  set('fis-pendiente', pintarPendiente(c));
+  // Hacienda simplificada (sept 2026): solo el IRPF que importa. Fuera el tostón de modelos
+  // vencidos, sanciones LGT, calendario y preguntas para la gestoría.
+  set('fis-urgente', pintar130Hero(c));      // el 130 de este trimestre
+  set('fis-apartar', pintarApartar(c));      // cuánto apartar
+  set('fis-renta', pintarRenta(c));          // IRPF del año + tu tramo, explicado
+  set('fis-modelos', pintar4Trimestres(c));  // los cuatro trimestres
 }
 
 // ---------------------------------------------------------------------------
