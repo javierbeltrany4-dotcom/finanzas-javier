@@ -302,6 +302,9 @@ tr.peor td { background: var(--red-dim) !important; }
 .gasto-fila { display: grid; grid-template-columns: 1fr 100px; gap: 8px; margin-bottom: 8px; }
 .gasto-fila input { font-family: var(--fh); }
 .gasto-fila input.imp { font-family: var(--fm); }
+/* Editor inline de la pestaña Gastos: los inputs necesitan el tema oscuro (fuera del modal no lo heredan). */
+#v-gastos .gasto-fila input { background: var(--surface2); border: 1px solid var(--border2); color: var(--text); border-radius: 10px; padding: 10px 12px; font-size: 15px; }
+#v-gastos .gasto-fila input:focus { outline: none; border-color: var(--green); }
 .form-actions { margin-top: 22px; display: flex; gap: 8px; }
 .nota { margin-top: 16px; font-size: 12px; color: var(--muted); line-height: 1.5; }
 
