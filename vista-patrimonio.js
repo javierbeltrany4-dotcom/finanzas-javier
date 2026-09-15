@@ -114,6 +114,23 @@ function pintarObjetivos(objetivos, f) {
     + grupo('objetivo', 'OBJETIVOS — esto sí es tuyo');
 }
 
+// ---------- Desglose de objetivos: cada uno por su nombre, con progreso hacia su meta ----------
+function pintarDesglose(objetivos, f) {
+  const metas = (objetivos || []).filter((o) => o.clase === 'objetivo');
+  if (!metas.length) {
+    return '<p class="mc">Aún no tienes objetivos. Añádelos arriba con su nombre (ej. «Carnet» 500 €) y aquí verás cuánto llevas de cada uno.</p>';
+  }
+  return metas.map((o) => {
+    const p = progresoObjetivo(o);
+    const cuerpo = (p.pct === null)
+      ? '<div class="mc" style="margin-top:8px">sin meta · solo apartado</div>'
+      : `<div class="progreso-bar" style="margin-top:10px"><div class="progreso-fill" style="width:${Math.min(100, p.pct).toFixed(0)}%"></div></div>
+         <div class="mc" style="margin-top:6px">${p.pct.toFixed(0)}% · ${p.completo ? '¡conseguido!' : 'faltan ' + f(p.falta)}</div>`;
+    const meta = o.meta > 0 ? ` <span class="mc">de ${f(o.meta)}</span>` : '';
+    return `<div class="card"><div class="l">${esc(o.nombre) || 'Objetivo'}</div><div class="v num">${f(o.asignado)}${meta}</div>${cuerpo}</div>`;
+  }).join('');
+}
+
 // ---------- Totales ----------
 function pintarTotales(e, f, card) {
   return [
@@ -265,6 +282,7 @@ export function renderPatrimonio(ctx) {
 
   set('pat-cuentas', pintarCuentas(cuentas, e.total, f));
   set('pat-objetivos', pintarObjetivos(objetivos, f));
+  set('pat-desglose', pintarDesglose(objetivos, f));
   set('pat-totales', pintarTotales(e, f, card));
   set('pat-avisos', pintarAvisos(e, objetivos, ctxUltimo, f));
 }
