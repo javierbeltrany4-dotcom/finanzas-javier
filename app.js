@@ -48,6 +48,9 @@ const FISCAL_RENTA_KEY = 'fiscal-renta-v1';
 // Viven en este dispositivo (localStorage); datos.json es solo la semilla.
 const FACTURAS_KEY = 'facturas-v1';
 const GASTOS_DEDUCIBLES_KEY = 'gastos-deducibles-v1';
+// Pestañas que el usuario decide ocultar (para quitar ruido). Editable en "Editar datos".
+const TABS_OCULTAS_KEY = 'tabs-ocultas-v1';
+const TABS_OCULTAS_DEFAULT = ['capital', 'objetivo', 'crecimiento', 'residencia'];
 // Credenciales de la sincronización: { url, clave }. SOLO en este dispositivo.
 // La clave es un secreto: no viaja en "Exportar datos.json" ni en la copia de seguridad.
 const SYNC_KEY = 'sync-v1';
@@ -150,6 +153,23 @@ function setFacturas(l) { localStorage.setItem(FACTURAS_KEY, JSON.stringify(Arra
 // Facturas de gastos deducibles (compras que no están en Contasimple). Forma: [{ fecha, base, concepto }].
 function getGastosDeducibles() { const o = localStorage.getItem(GASTOS_DEDUCIBLES_KEY); return o ? JSON.parse(o) : (config.gastosDeducibles || []); }
 function setGastosDeducibles(l) { localStorage.setItem(GASTOS_DEDUCIBLES_KEY, JSON.stringify(Array.isArray(l) ? l : [])); marcarCambio(); }
+// Pestañas ocultas: localStorage manda; si no hay nada, el default (esconde las de simulación).
+function getTabsOcultas() {
+  const o = leerJSON(TABS_OCULTAS_KEY);
+  if (Array.isArray(o)) return o;
+  return Array.isArray(config && config.tabsOcultas) ? config.tabsOcultas : TABS_OCULTAS_DEFAULT.slice();
+}
+function setTabsOcultas(arr) { localStorage.setItem(TABS_OCULTAS_KEY, JSON.stringify(Array.isArray(arr) ? arr : [])); marcarCambio(); }
+// Aplica la visibilidad. Si la vista activa queda oculta, salta a la primera visible.
+function aplicarVisibilidadTabs() {
+  const ocultas = getTabsOcultas();
+  const botones = [...document.querySelectorAll('.tab')];
+  botones.forEach((t) => { t.style.display = ocultas.includes(t.dataset.vista) ? 'none' : ''; });
+  if (ocultas.includes(vistaActiva)) {
+    const primera = botones.find((t) => !ocultas.includes(t.dataset.vista));
+    if (primera) cambiarVista(primera.dataset.vista);
+  }
+}
 const split = () => config.config.split;
 
 // ---------- Cuánto facturar: modelo del negocio, Dubái y objetivo limpio ----------
@@ -1347,6 +1367,18 @@ function leerDeduciblesEdit() {
   });
   return Object.values(filas).filter((g) => /^\d{4}-\d{2}-\d{2}$/.test(g.fecha));
 }
+// Selector de pestañas: una casilla por pestaña; marcada = oculta.
+function pintarTabsEdit() {
+  const ocultas = getTabsOcultas();
+  document.getElementById('g-tabs').innerHTML = [...document.querySelectorAll('.tab')].map((t) =>
+    `<label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer"><input type="checkbox" data-vista="${t.dataset.vista}" ${ocultas.includes(t.dataset.vista) ? 'checked' : ''}/> Ocultar «${esc(t.textContent.trim())}»</label>`
+  ).join('');
+}
+function leerTabsEdit() {
+  const ocultas = [];
+  document.querySelectorAll('#g-tabs input[type="checkbox"]').forEach((c) => { if (c.checked) ocultas.push(c.dataset.vista); });
+  return ocultas;
+}
 function abrirModal() {
   document.getElementById('g-saldo').value = getSaldo().importe;
   document.getElementById('g-meta').value = getMeta();
@@ -1357,6 +1389,7 @@ function abrirModal() {
   pintarGastosEdit();
   pintarFacturasEdit();
   pintarDeduciblesEdit();
+  pintarTabsEdit();
   const cred = getSync();
   document.getElementById('g-sync-url').value = cred.url;
   document.getElementById('g-sync-clave').value = cred.clave;
@@ -1418,6 +1451,8 @@ function guardarModal() {
   setFacturas(leerFacturasEdit());
   setGastosDeducibles(leerDeduciblesEdit());
   adjuntarDatosUsuario();
+  setTabsOcultas(leerTabsEdit());
+  aplicarVisibilidadTabs();
   // IRPF: si el porcentaje viene vacío o mal, se conserva el que había (nunca NaN).
   const pct = parseFloat(document.getElementById('g-irpf').value);
   localStorage.setItem(IRPF_KEY, JSON.stringify({
@@ -1805,6 +1840,7 @@ if ('serviceWorker' in navigator) {
   // spinner y sin explicación. Nada de lo que llega por red es necesario para abrir.
   cargarDeCache();
   cambiarVista('decisiones');
+  aplicarVisibilidadTabs();
 
   // Y DESPUÉS se pide por red, cada cosa por su cuenta y repintando cuando llegue. Van en
   // paralelo a propósito: son independientes y ninguna tiene que esperar a la otra.
