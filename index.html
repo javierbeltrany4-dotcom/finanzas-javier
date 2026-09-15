@@ -454,12 +454,21 @@
       <label>Conceptos que tributan (separados por coma)</label>
       <input type="text" id="g-banco" />
 
-      <label>Conceptos cobrados en cripto (tributan igual)</label>
+      <label>Conceptos cobrados en cripto (NO tributan)</label>
       <input type="text" id="g-cripto" />
 
       <label>Mis gastos fijos mensuales</label>
       <div id="g-gastos"></div>
       <button class="btn btn-ghost" id="g-add-gasto" style="margin-top:8px">+ Añadir gasto</button>
+
+      <hr style="border:none;border-top:1px solid var(--linea,#2a2a2a);margin:22px 0 4px" />
+      <label>Facturas emitidas (Contasimple) · la base real del IRPF (fecha · base €)</label>
+      <div id="g-facturas"></div>
+      <button class="btn btn-ghost" id="g-add-factura" style="margin-top:8px">+ Añadir factura</button>
+
+      <label>Facturas de gastos deducibles · restan del IRPF (concepto · fecha · base €)</label>
+      <div id="g-deducibles"></div>
+      <button class="btn btn-ghost" id="g-add-deducible" style="margin-top:8px">+ Añadir gasto deducible</button>
 
       <div class="form-actions">
         <button class="btn btn-primary" id="g-guardar">Guardar</button>

@@ -42,6 +42,12 @@ const FISCAL_CHECKLIST_KEY = 'fiscal-checklist-v1';
 // deducibles que no están en la hoja. { minimoPersonal?, reducciones?, otrosGastos? }.
 // Una clave AUSENTE significa "no lo sé" y renta.js lo dice con su aviso; un 0 significa cero.
 const FISCAL_RENTA_KEY = 'fiscal-renta-v1';
+// Facturas emitidas reales (de Contasimple) y facturas de gastos deducibles (compras que NO
+// están en Contasimple: cámara, etc.). Son la base REAL del IRPF: si hay facturas mandan ellas
+// sobre la estimación por retiros, y el cripto queda fuera porque no se factura en Contasimple.
+// Viven en este dispositivo (localStorage); datos.json es solo la semilla.
+const FACTURAS_KEY = 'facturas-v1';
+const GASTOS_DEDUCIBLES_KEY = 'gastos-deducibles-v1';
 // Credenciales de la sincronización: { url, clave }. SOLO en este dispositivo.
 // La clave es un secreto: no viaja en "Exportar datos.json" ni en la copia de seguridad.
 const SYNC_KEY = 'sync-v1';
@@ -138,6 +144,12 @@ function getPatrimonio() { const o = localStorage.getItem(PATRIMONIO_KEY); retur
 function setPatrimonio(p) { localStorage.setItem(PATRIMONIO_KEY, JSON.stringify(p)); marcarCambio(); }
 // Config de IRPF: porcentaje y listas de conceptos. Editable desde el modal.
 function getIrpf() { const o = localStorage.getItem(IRPF_KEY); return o ? JSON.parse(o) : (config.config.irpf || C.IRPF_DEFAULT); }
+// Facturas emitidas reales (Contasimple). localStorage manda; datos.json es la semilla. Forma: [{ fecha, base }] (+ campos informativos n/cliente que la parte fiscal ignora).
+function getFacturas() { const o = localStorage.getItem(FACTURAS_KEY); return o ? JSON.parse(o) : (config.facturas || []); }
+function setFacturas(l) { localStorage.setItem(FACTURAS_KEY, JSON.stringify(Array.isArray(l) ? l : [])); marcarCambio(); }
+// Facturas de gastos deducibles (compras que no están en Contasimple). Forma: [{ fecha, base, concepto }].
+function getGastosDeducibles() { const o = localStorage.getItem(GASTOS_DEDUCIBLES_KEY); return o ? JSON.parse(o) : (config.gastosDeducibles || []); }
+function setGastosDeducibles(l) { localStorage.setItem(GASTOS_DEDUCIBLES_KEY, JSON.stringify(Array.isArray(l) ? l : [])); marcarCambio(); }
 const split = () => config.config.split;
 
 // ---------- Cuánto facturar: modelo del negocio, Dubái y objetivo limpio ----------
@@ -476,11 +488,20 @@ function cargarDeCache() {
   const c = leerJSON(CACHE_KEY);
   if (!c) return false;
   datos = c.datos || c;
+  adjuntarDatosUsuario();
   ultimaActualizacion = c.ts || null;
   desdeCache = true;
   const est = document.getElementById('estado');
   if (est) { est.textContent = 'Desde caché'; est.className = 'estado cache'; }
   return true;
+}
+
+// Adjunta a `datos` lo que el usuario mantiene a mano y que la parte fiscal necesita: las
+// facturas reales (Contasimple) y las de gastos deducibles. Siempre frescas de localStorage,
+// nunca desde la caché de Tradingverso, para que no se queden pegadas ni contaminen ese caché.
+function adjuntarDatosUsuario() {
+  datos.facturas = getFacturas();
+  datos.gastosDeducibles = getGastosDeducibles();
 }
 
 async function cargarNegocio() {
@@ -497,9 +518,11 @@ async function cargarNegocio() {
     ultimaActualizacion = new Date().toISOString();
     desdeCache = false;
     localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: ultimaActualizacion, datos }));
+    adjuntarDatosUsuario();
     est.textContent = `En vivo · ${horaAhora()}`; est.className = 'estado online';
   } else if (!cargarDeCache()) {
     datos = { ingresos: [], retiros: [], ventas: [], gastosNegocio: [], caja: {} };
+    adjuntarDatosUsuario();
     ultimaActualizacion = null; desdeCache = true;
     est.textContent = 'Sin conexión'; est.className = 'estado error';
   }
@@ -539,8 +562,8 @@ function renderVerificacion(destino = 'verificacion', compacto = false) {
   if (desconocidos.length) {
     const plural = desconocidos.length > 1;
     ambar = `<div class="aviso-ambar">${ICON_WARN}<span><strong>${desconocidos.length} concepto${plural ? 's' : ''} de retiro sin clasificar:</strong> ${desconocidos.map(esc).join(', ')}.
-      No sé si tributan, así que cuenta${plural ? 'n' : ''} <strong>0 €</strong> de IRPF y el neto real puede estar inflado.
-      <span class="mc">Clasifícalo${plural ? 's' : ''} en <strong>Editar datos</strong>: es solo la etiqueta del canal de cobro (banco o cripto). Tributar, tributan los dos igual.</span></span></div>`;
+      Por si acaso le${plural ? 's' : ''} cuento IRPF (como si fuera banco). Si en realidad es <strong>cripto</strong>, ese IRPF sobra.
+      <span class="mc">Clasifícalo${plural ? 's' : ''} en <strong>Editar datos</strong>: si es cripto (Binance, Bitbase) dejará de contar IRPF; si es banco (Fyrst), se queda igual.</span></span></div>`;
   }
   cont.innerHTML = stale + badge + ambar + (compacto ? '' : `<div class="vchecks">${checks}</div>`);
 }
@@ -560,7 +583,7 @@ function pintarLineaIrpf(disponible) {
     hero.appendChild(linea);
   }
   const impuesto = disponible * (pct / 100);
-  linea.innerHTML = `IRPF <strong>−${f(impuesto)}</strong> (${pct}%): te quedarían <span class="neto">${f(disponible - impuesto)}</span>. Da igual el canal: por transferencia o en cripto, tributa lo mismo.`;
+  linea.innerHTML = `IRPF <strong>−${f(impuesto)}</strong> (${pct}%): te quedarían <span class="neto">${f(disponible - impuesto)}</span>. Es si lo sacas por <strong>banco</strong>; lo que retires en cripto no lleva IRPF.`;
 }
 
 function renderResumen() {
@@ -728,7 +751,7 @@ function renderRetiros() {
   document.getElementById('retiros-totales').innerHTML = [
     card(`${res.n} retiro${res.n === 1 ? '' : 's'}`, `<span class="num">${f(res.bruto)}</span>`, 'bruto del negocio (100%)'),
     card('Mi 40%', `<span class="num pos">${f(res.miBruto)}</span>`, 'mi parte, antes de impuestos'),
-    card('IRPF', `<span class="num col-irpf">${f(res.irpf)}</span>`, 'de todos mis retiros, banco y cripto'),
+    card('IRPF', `<span class="num col-irpf">${f(res.irpf)}</span>`, 'solo retiros por banco; el cripto no cuenta'),
     card('Neto real', `<span class="num ${res.miNeto >= 0 ? 'pos' : 'neg'}">${f(res.miNeto)}</span>`, 'lo que me queda tras Hacienda'),
   ].join('');
 
@@ -741,11 +764,9 @@ function renderRetiros() {
     if (filtro === 'yo') { imp = yo; rep = 'Yo (40%)'; }
     else if (filtro === 'david') { imp = david; rep = 'David (60%)'; }
     else { imp = r.total; rep = `Yo ${f(yo)} · David ${f(david)}`; }
-    // TRIBUTA TODO, venga por donde venga. El concepto solo dice el CANAL de cobro: es
-    // autónomo español facturando a la GmbH de su socio, así que cobrar en cripto es
-    // rendimiento de actividad económica igual (arts. 28.1 y 43 LIRPF). Antes esta columna
-    // pintaba "—" en los de cripto y dejaba 1.572,80 € de 5.372,80 € con cara de exentos,
-    // mientras la pestaña "Hacienda" los metía enteros en la base del 130 y del 349.
+    // El CRIPTO no cuenta para el IRPF (decisión del dueño): el IRPF de verdad va sobre lo
+    // facturado en Contasimple, y el cripto no se factura ahí. La columna muestra el IRPF solo
+    // de los retiros por banco; en los de cripto sale 0. El canal lo decide `clasificarRetiro`.
     const clase = C.clasificarRetiro(r, irpfCfg);
     const tdIrpf = `<td class="num col-irpf">−${f(C.irpfDeRetiro(r, irpfCfg, sp))}</td>`;
     const tdNeto = `<td class="num pos">${f(C.miNetoDeRetiro(r, irpfCfg, sp))}</td>`;
@@ -756,7 +777,7 @@ function renderRetiros() {
   const listaCripto = (irpfCfg.conceptosCripto || []).join(', ') || '—';
   document.getElementById('tabla-retiros').innerHTML =
     `<table><thead><tr><th>Fecha</th><th class="num">Importe</th><th>Reparto</th><th class="num col-irpf">IRPF</th><th class="num">Neto real (mío)</th><th class="num">Caja restante (contable)</th></tr></thead><tbody>${filas}</tbody></table>
-     <p class="mc" style="padding:12px 18px 2px">El <strong>IRPF</strong> (${Number(irpfCfg.porcentaje) || 0}%) se calcula sobre mi 40% de <strong>todos</strong> los retiros. El concepto solo dice por dónde entró el dinero —banco (${esc(listaBanco)}) o cripto (${esc(listaCripto)})—, y eso no cambia lo que tributas: facturas a una empresa alemana, así que todo es rendimiento de actividad económica (arts. 28.1 y 43 LIRPF) y todo cuenta para el modelo 130.</p>`;
+     <p class="mc" style="padding:12px 18px 2px">El <strong>IRPF</strong> (${Number(irpfCfg.porcentaje) || 0}%) se aplica solo a los retiros que entran por <strong>banco</strong> (${esc(listaBanco)}). Lo que entra en <strong>cripto</strong> (${esc(listaCripto)}) NO cuenta para el IRPF, porque no se factura en Contasimple. El IRPF de verdad se calcula sobre lo <strong>facturado</strong> (pestaña Hacienda, modelo 130).</p>`;
 }
 
 // ---------- MI DINERO ----------
@@ -852,7 +873,7 @@ function renderMiDinero() {
   if (!filas) filas = '<tr><td colspan="6" class="vacio">Sin datos todavía.</td></tr>';
   document.getElementById('midinero-tabla').innerHTML =
     `<table><thead><tr><th>Mes</th><th class="num">Mi beneficio (40%)</th><th class="num">Mi retiro</th><th class="num col-irpf">IRPF</th><th class="num">Gastos fijos</th><th class="num">Ahorro real</th></tr></thead><tbody>${filas}</tbody></table>
-     <p class="mc" style="padding:12px 18px 2px">El <strong>ahorro real</strong> = lo que retiraste ese mes − el <strong>IRPF</strong> de esos retiros − tus gastos fijos: el dinero que de verdad te llevaste a casa. Tributan todos los retiros, cobres por transferencia o en cripto. No depende del beneficio del negocio de ese mes (puedes retirar de meses anteriores). Por eso mayo, aun siendo mal mes para el negocio, tiene ahorro alto: hiciste un reparto grande.</p>`;
+     <p class="mc" style="padding:12px 18px 2px">El <strong>ahorro real</strong> = lo que retiraste ese mes − el <strong>IRPF</strong> de esos retiros − tus gastos fijos: el dinero que de verdad te llevaste a casa. Cuenta el IRPF de los retiros por banco; el cripto no lleva IRPF. No depende del beneficio del negocio de ese mes (puedes retirar de meses anteriores). Por eso mayo, aun siendo mal mes para el negocio, tiene ahorro alto: hiciste un reparto grande.</p>`;
 }
 
 // ---------- CALENDARIO ----------
@@ -868,7 +889,7 @@ function eventosDeFecha(iso) {
     evs.push({ tipo: 'retiro', txt: `Retiro ${f(r.total)}` });
     evs.push({ tipo: 'mio', txt: `mi 40%: ${f(C.miParteDe(r.total, sp))}` });
     // El retiro ya se cobró: aquí el IRPF es real, no una estimación.
-    // Tributa igual venga por banco o por cripto: el canal no cambia la tributación.
+    // El cripto va exento: irpfDeRetiro devuelve 0 en los de cripto (el banco sí tributa).
     evs.push({ tipo: 'gasto', txt: `IRPF −${f(C.irpfDeRetiro(r, cfg, sp))}` });
     evs.push({ tipo: 'mio', txt: `neto: ${f(C.miNetoDeRetiro(r, cfg, sp))}` });
     if (C.clasificarRetiro(r, cfg) === 'desconocido') {
@@ -1041,7 +1062,7 @@ function abrirDetalleDia(iso) {
     html += `<div class="dia-seccion"><h4>Retiros (${retiros.length})</h4>` +
       retiros.map((r) => {
         // Aquí sí hay retiro: el IRPF es el real de ese movimiento, no una estimación.
-        // Tributa igual por banco que por cripto; el canal solo se nombra como origen.
+        // El cripto va exento (IRPF 0); el banco tributa. El canal lo decide clasificarRetiro.
         const clase = C.clasificarRetiro(r, cfg);
         const canal = clase === 'desconocido' ? ' · canal sin clasificar' : '';
         const sub = `yo 40% · IRPF −${f(C.irpfDeRetiro(r, cfg, sp))}${canal}`;
@@ -1052,7 +1073,7 @@ function abrirDetalleDia(iso) {
   if (!ventas.length && !gastos.length && !retiros.length) {
     html += '<p class="mc">Sin movimientos este día.</p>';
   }
-  html += `<p class="nota">Columna derecha = tu parte (40%), ya con el IRPF descontado, cobres por banco o en cripto. La línea <strong>Tras IRPF</strong> del resumen es una <strong>estimación</strong>: ese beneficio sigue en la caja del negocio y no tributa hasta que lo retires.</p></div>`;
+  html += `<p class="nota">Columna derecha = tu parte (40%), con el IRPF descontado en los cobros por <strong>banco</strong> (el cripto no lleva IRPF). La línea <strong>Tras IRPF</strong> del resumen es una <strong>estimación</strong>: ese beneficio sigue en la caja del negocio y no tributa hasta que lo retires.</p></div>`;
 
   document.getElementById('modal-dia-contenido').innerHTML = html;
   document.getElementById('modal-dia').classList.remove('oculto');
@@ -1292,6 +1313,40 @@ function leerGastosEdit() {
 function leerConceptos(id) {
   return document.getElementById(id).value.split(',').map((s) => s.trim()).filter(Boolean);
 }
+
+// --- Facturas emitidas (Contasimple) y gastos deducibles: filas editables del modal ---
+// Son la base REAL del IRPF. Solo cuentan las filas con una fecha válida (YYYY-MM-DD).
+function pintarFacturasEdit() {
+  document.getElementById('g-facturas').innerHTML = getFacturas().map((fac, i) =>
+    `<div class="gasto-fila"><input data-i="${i}" data-k="fecha" type="date" value="${esc(String((fac && fac.fecha) || ''))}"/><input data-i="${i}" data-k="base" class="imp" type="number" step="0.01" value="${Number(fac && fac.base) || 0}" placeholder="base €"/></div>`
+  ).join('') || '<p class="mc">Sin facturas todavía.</p>';
+}
+function leerFacturasEdit() {
+  const filas = {};
+  document.querySelectorAll('#g-facturas input').forEach((inp) => {
+    const i = inp.dataset.i;
+    filas[i] = filas[i] || { fecha: '', base: 0 };
+    if (inp.dataset.k === 'fecha') filas[i].fecha = inp.value;
+    else filas[i].base = parseFloat(inp.value) || 0;
+  });
+  return Object.values(filas).filter((fac) => /^\d{4}-\d{2}-\d{2}$/.test(fac.fecha));
+}
+function pintarDeduciblesEdit() {
+  document.getElementById('g-deducibles').innerHTML = getGastosDeducibles().map((g, i) =>
+    `<div class="gasto-fila" style="grid-template-columns:1fr 130px 90px"><input data-i="${i}" data-k="concepto" value="${esc(String((g && g.concepto) || ''))}" placeholder="Concepto (cámara…)"/><input data-i="${i}" data-k="fecha" type="date" value="${esc(String((g && g.fecha) || ''))}"/><input data-i="${i}" data-k="base" class="imp" type="number" step="0.01" value="${Number(g && g.base) || 0}" placeholder="base €"/></div>`
+  ).join('') || '<p class="mc">Sin gastos deducibles todavía.</p>';
+}
+function leerDeduciblesEdit() {
+  const filas = {};
+  document.querySelectorAll('#g-deducibles input').forEach((inp) => {
+    const i = inp.dataset.i;
+    filas[i] = filas[i] || { concepto: '', fecha: '', base: 0 };
+    if (inp.dataset.k === 'concepto') filas[i].concepto = inp.value;
+    else if (inp.dataset.k === 'fecha') filas[i].fecha = inp.value;
+    else filas[i].base = parseFloat(inp.value) || 0;
+  });
+  return Object.values(filas).filter((g) => /^\d{4}-\d{2}-\d{2}$/.test(g.fecha));
+}
 function abrirModal() {
   document.getElementById('g-saldo').value = getSaldo().importe;
   document.getElementById('g-meta').value = getMeta();
@@ -1300,6 +1355,8 @@ function abrirModal() {
   document.getElementById('g-banco').value = (irpf.conceptosBanco || []).join(', ');
   document.getElementById('g-cripto').value = (irpf.conceptosCripto || []).join(', ');
   pintarGastosEdit();
+  pintarFacturasEdit();
+  pintarDeduciblesEdit();
   const cred = getSync();
   document.getElementById('g-sync-url').value = cred.url;
   document.getElementById('g-sync-clave').value = cred.clave;
@@ -1356,6 +1413,11 @@ function guardarModal() {
   const meta = parseFloat(document.getElementById('g-meta').value);
   if (!Number.isNaN(meta)) localStorage.setItem(META_KEY, String(meta));
   localStorage.setItem(GASTOS_KEY, JSON.stringify(leerGastosEdit()));
+  // Facturas reales (Contasimple) y gastos deducibles: la base del IRPF. Se re-adjuntan a
+  // `datos` en el acto para que las cifras se recalculen sin recargar.
+  setFacturas(leerFacturasEdit());
+  setGastosDeducibles(leerDeduciblesEdit());
+  adjuntarDatosUsuario();
   // IRPF: si el porcentaje viene vacío o mal, se conserva el que había (nunca NaN).
   const pct = parseFloat(document.getElementById('g-irpf').value);
   localStorage.setItem(IRPF_KEY, JSON.stringify({
@@ -1629,6 +1691,14 @@ function bind() {
   document.getElementById('g-add-gasto').addEventListener('click', () => {
     const actuales = leerGastosEdit(); actuales.push({ nombre: '', importe: 0, diaPago: 1 });
     localStorage.setItem(GASTOS_KEY, JSON.stringify(actuales)); pintarGastosEdit();
+  });
+  document.getElementById('g-add-factura').addEventListener('click', () => {
+    const actuales = leerFacturasEdit(); actuales.push({ fecha: hoyISO(), base: 0 });
+    setFacturas(actuales); pintarFacturasEdit();
+  });
+  document.getElementById('g-add-deducible').addEventListener('click', () => {
+    const actuales = leerDeduciblesEdit(); actuales.push({ concepto: '', fecha: hoyISO(), base: 0 });
+    setGastosDeducibles(actuales); pintarDeduciblesEdit();
   });
   // Copia en archivo y sincronización. El input de archivo va oculto: el botón lo dispara.
   document.getElementById('g-guardar-copia').addEventListener('click', guardarCopia);

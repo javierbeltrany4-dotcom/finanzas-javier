@@ -242,31 +242,25 @@ export function clasificarRetiro(retiro, cfg = IRPF_DEFAULT) {
   return 'desconocido';
 }
 
-// TRIBUTA TODO. Siempre `true`, y sigue existiendo para no romper a quien la llame.
+// EL CRIPTO NO GENERA IRPF EN ESTE PANEL (decisión del dueño, sept 2026).
 //
-// LO QUE SE ARREGLÓ AQUÍ, y es de las cosas más caras que había: esta función devolvía
-// `false` para los retiros de cripto, y de ahí salía un IRPF de cero para casi el 30 % de lo
-// que él cobra (1.572,80 € de 5.372,80 € en 2026). Es falso. Él es autónomo español y factura
-// a la GmbH de su socio: el CANAL por el que le pagan no cambia nada. Cobrar en cripto es
-// rendimiento de actividad económica a valor de mercado el día del cobro (art. 28.1 y art. 43
-// LIRPF) y computa para el pago fraccionado del modelo 130.
+// El IRPF de verdad se paga sobre lo FACTURADO en Contasimple (cobros por banco/tarjeta): esas
+// facturas son la base del modelo 130. Lo que entra en cripto (Binance, Bitbase) NO se factura
+// ahí, así que en el software NO cuenta para el IRPF. `clasificarRetiro` sigue diciendo por qué
+// canal entró el dinero (dato útil: Binance y Bitbase cerraron en España el 1/07/2026 por MiCA);
+// lo que ahora hace `tributaRetiro` es, además, dejar el cripto exento.
 //
-// La app ya lo trataba así donde de verdad importa: `facturadoEntre()` (fiscal.js) mete esos
-// euros en la base del 130 y del 349 sin mirar el concepto, y `retiradoYtd` (objetivo.js) los
-// cuenta enteros. O sea que la app se contradecía sobre los mismos euros, y la versión
-// benévola era justo la que él mira a diario. Ver docs/PLAN-MAESTRO.md ("Pendientes sueltos")
-// y docs/cobros-y-wise-2026.md (Pregunta 1, con la norma).
-//
-// `clasificarRetiro` NO desaparece: sigue diciendo por dónde entró el dinero, que es un dato
-// útil (y hoy urgente: Binance y Bitbase cerraron en España el 1/07/2026 por MiCA). Lo que ya
-// no hace es decidir si tributa.
+// OJO: esto es lo que Javier quiere ver en el panel. La liquidación real ante Hacienda la firma
+// su asesoría; si algún día dicen que el cripto tributa, se cambia la regla aquí. Un retiro cuyo
+// concepto no reconocemos cae a 'desconocido' y SÍ tributa (conservador): clasifícalo en Editar
+// datos para que deje de contar.
 export function tributaRetiro(retiro, cfg = IRPF_DEFAULT) {
-  return true;
+  return clasificarRetiro(retiro, cfg) !== 'cripto';
 }
 
-// IRPF sobre MI parte. De TODOS los retiros, venga el dinero por donde venga: el canal de
-// cobro no cambia la tributación (ver `tributaRetiro`).
+// IRPF sobre MI parte de un retiro. El cripto va exento (ver `tributaRetiro`): devuelve 0.
 export function irpfDeRetiro(retiro, cfg = IRPF_DEFAULT, split = SPLIT) {
+  if (!tributaRetiro(retiro, cfg)) return 0;
   const pct = Number(cfg?.porcentaje) || 0;
   return (retiro?.total || 0) * split.yo * (pct / 100);
 }

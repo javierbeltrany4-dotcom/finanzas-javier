@@ -6,7 +6,7 @@
     "metaMensual": 0,
     "irpf": {
       "porcentaje": 20,
-      "conceptosBanco": ["Fyrst"],
+      "conceptosBanco": ["Fyrst", "Bizum", "Bunq"],
       "conceptosCripto": ["Binance", "Bitbase"]
     },
     "gastosFijos": [
@@ -33,5 +33,13 @@
   },
   "saldoBanco": { "importe": 0, "fechaActualizacion": "2026-06-21" },
   "patrimonio": { "cuentas": [], "objetivos": [] },
-  "objetivoLimpio": 3000
+  "objetivoLimpio": 3000,
+  "facturas": [
+    { "n": "2026-0002", "fecha": "2026-07-06", "base": 800, "cliente": "Jose David Rosell Fernandez" },
+    { "n": "2026-0003", "fecha": "2026-07-30", "base": 800, "cliente": "Jose David Rosell Fernandez" },
+    { "n": "2026-0004", "fecha": "2026-08-08", "base": 1400, "cliente": "Jose David Rosell Fernandez" },
+    { "n": "2026-0005", "fecha": "2026-08-21", "base": 520, "cliente": "Jose David Rosell Fernandez" },
+    { "n": "2026-0006", "fecha": "2026-09-05", "base": 3200, "cliente": "Jose David Rosell Fernandez" }
+  ],
+  "gastosDeducibles": []
 }

@@ -457,6 +457,11 @@ function contextoFiscal(ctx, hoyISO) {
   const facturas = (Array.isArray(datos.facturas) ? datos.facturas : [])
     .map((f) => ({ fecha: String((f && f.fecha) ?? ''), base: num(f && f.base, 0) }))
     .filter((f) => esFecha(f.fecha));
+  // Facturas de gastos deducibles (compras que NO están en Contasimple: cámara, etc.). Restan
+  // del rendimiento del 130 y de la Renta, igual que la cuota de autónomo y la asesoría.
+  const gastosDeducibles = (Array.isArray(datos.gastosDeducibles) ? datos.gastosDeducibles : [])
+    .map((g) => ({ fecha: String((g && g.fecha) ?? ''), base: num(g && g.base, 0) }))
+    .filter((g) => esFecha(g.fecha));
 
   const anioDeHoy = hoy ? Number(hoy.slice(0, 4)) : null;
   const anio = Number.isFinite(Number(c.anio)) ? Math.trunc(Number(c.anio)) : anioDeHoy;
@@ -490,7 +495,7 @@ function contextoFiscal(ctx, hoyISO) {
   const porVentaMia = porVenta(modelo).miParte;
 
   return {
-    datos, config, modelo, hoy, anio, desdeAnio, retiros, facturas, presentados, roi,
+    datos, config, modelo, hoy, anio, desdeAnio, retiros, facturas, gastosDeducibles, presentados, roi,
     renta, porVentaMia, share: modelo.miShare / 100,
     gastoDeducibleMes: modelo.cuotaAutonomo + modelo.deducibles,
   };
@@ -510,6 +515,13 @@ function facturadoEntre(c, desde, hasta) {
       .reduce((acc, f) => acc + f.base, 0);
   }
   return retirosEntre(c.retiros, desde, hasta) * c.share;
+}
+
+// Los gastos deducibles APUNTADOS (facturas de compra) entre dos fechas, ambas inclusive.
+function gastosDeduciblesEntre(c, desde, hasta) {
+  return (c.gastosDeducibles || [])
+    .filter((g) => g.fecha >= desde && g.fecha <= hasta)
+    .reduce((acc, g) => acc + g.base, 0);
 }
 
 function fuenteIngresos(c) {
@@ -781,7 +793,10 @@ function cuota130Acumulada(c, t, anio) {
   // cuando hoy ya ha pasado su último día. Solo se proyecta lo que de verdad sigue abierto.
   const cerrado = Boolean(c.hoy) && (anio !== c.anio || c.hoy >= finTrimestre);
   let ingresos;
-  if (cerrado || !c.renta || anio !== c.anio) {
+  // Si hay facturas reales apuntadas MANDAN ellas, aunque el trimestre siga abierto: son el
+  // dato bueno de Contasimple, no una proyección (y el cripto queda fuera porque no se factura
+  // ahí). Solo se proyecta por retiros cuando NO hay facturas y el trimestre está en curso.
+  if (c.facturas.length || cerrado || !c.renta || anio !== c.anio) {
     ingresos = facturadoEntre(c, desde, finTrimestre);
   } else {
     // Ritmo del año: lo facturado hasta hoy dividido entre los meses transcurridos (con la
@@ -790,7 +805,9 @@ function cuota130Acumulada(c, t, anio) {
     ingresos = ritmoMensual * mesesAcumulados;
   }
 
-  const gastos = c.gastoDeducibleMes * mesesAcumulados;
+  // Gastos deducibles = el fijo mensual (cuota autónomo + asesoría) por los meses transcurridos
+  // + las facturas de compra apuntadas (cámara, etc.) de esos meses.
+  const gastos = c.gastoDeducibleMes * mesesAcumulados + gastosDeduciblesEntre(c, desde, finTrimestre);
   const rendimiento = ingresos - gastos;
   const cuota = Math.max(0, rendimiento) * (PORCENTAJE_130 / 100);
 

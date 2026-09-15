@@ -821,9 +821,16 @@ export function rentaFiscalDelAnio(datos, m, hoyISO, tramos = TRAMOS_IRPF, minim
     [campo]: num(f && f[campo], 0),
   }));
 
-  // Su renta: los retiros del año hasta hoy, por su parte. El importe apuntado en la hoja
-  // es el reparto ENTERO (los dos socios); lo suyo es el miShare de ese total.
-  const retiradoYtd = retirosEntre(limpiar(retiros, 'total'), eneroUno, hoy) * share;
+  // Su renta fiscal del año hasta hoy. Si hay facturas reales apuntadas (Contasimple) MANDAN
+  // ellas: son la base del IRPF y dejan el cripto fuera (no se factura ahí). Si no hay facturas,
+  // se reconstruye de los retiros por su miShare, como antes.
+  const enRango = (obj) => { const fe = String((obj && obj.fecha) ?? ''); return fe >= eneroUno && fe <= hoy; };
+  const facturas = Array.isArray(d.facturas) ? d.facturas : [];
+  const hayFacturas = facturas.some((fac) => String((fac && fac.fecha) ?? '').slice(0, 4) === hoy.slice(0, 4));
+  const facturadoYtd = facturas.filter(enRango).reduce((acc, fac) => acc + num(fac && fac.base, 0), 0);
+  const retiradoYtd = hayFacturas
+    ? facturadoYtd
+    : retirosEntre(limpiar(retiros, 'total'), eneroUno, hoy) * share;
 
   // Informativo, la otra mitad de la historia: lo que le habría tocado por contrato.
   const beneficioYtd = ventasNetasEntre(limpiar(ventas, 'neto'), eneroUno, hoy)
@@ -833,10 +840,16 @@ export function rentaFiscalDelAnio(datos, m, hoyISO, tramos = TRAMOS_IRPF, minim
   const transcurrido = transcurridoDelAnio(hoy, meses);
   const retiradoProyectado = (retiradoYtd / transcurrido) * 12;
 
+  // Gastos deducibles apuntados (facturas de compra: cámara, etc.) del año hasta hoy. Restan de
+  // la base como gasto real; no se anualizan (una compra puntual es de su mes, no de los doce).
+  const gastosDedYtd = (Array.isArray(d.gastosDeducibles) ? d.gastosDeducibles : [])
+    .filter(enRango)
+    .reduce((acc, g) => acc + num(g && g.base, 0), 0);
+
   // La cuota de autónomo y la asesoría son gasto deducible de los doce meses del año, se
   // haya facturado mucho o poco. Si aún no ha facturado casi nada la base sale negativa:
   // es una pérdida real del ejercicio, no un error, y el IRPF de una base negativa es 0.
-  const baseIrpf = retiradoProyectado - (x.cuotaAutonomo + x.deducibles) * 12;
+  const baseIrpf = retiradoProyectado - (x.cuotaAutonomo + x.deducibles) * 12 - gastosDedYtd;
 
   const irpfReal = irpfPorTramos(baseIrpf, tramos, minimoPersonal);
   const retenidoProyectado = Math.max(0, baseIrpf) * (x.irpf / 100);

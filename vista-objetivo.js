@@ -500,7 +500,7 @@ function pintarIrpf(c) {
     <div class="manda">
       <span class="l">Has facturado este año</span>
       <span class="v num">${euros(f, r.retiradoYtd)}</span>
-      <span class="mc">POR ESTO TRIBUTAS · tu ${pctTexto(m.miShare)} de los repartos de enero a ${mesHoy}</span>
+      <span class="mc">POR ESTO TRIBUTAS · lo facturado de enero a ${mesHoy} (el cripto no cuenta)</span>
     </div>
     <div>
       <span class="l">Te correspondería (${pctTexto(m.miShare)})</span>
