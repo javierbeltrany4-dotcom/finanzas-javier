@@ -317,10 +317,14 @@
     <section class="vista" id="v-gastos">
       <div id="gastos-irpf"></div>
       <div class="bloque">
-        <div class="bloque-title">Mis gastos deducibles</div>
-        <div class="grid grid-3" id="gastos-lista"></div>
-        <button class="btn btn-ghost" id="gastos-editar" style="margin-top:12px">+ Añadir / editar deducibles</button>
-        <p class="mc" style="margin-top:10px">Aquí van tus facturas de compra (cámara, etc.) y tus fijos deducibles (cuota autónomo + gestoría). Con el interruptor de arriba decides si se restan del IRPF.</p>
+        <div class="bloque-title">Deducibles fijos (cada mes)</div>
+        <div class="grid grid-3" id="gastos-fijos"></div>
+      </div>
+      <div class="bloque">
+        <div class="bloque-title">Facturas de compra deducibles (cámara, etc.)</div>
+        <div id="gastos-editar-lista"></div>
+        <button class="btn btn-ghost" id="gastos-add" style="margin-top:8px">+ Añadir factura</button>
+        <p class="mc" style="margin-top:10px">Se guardan solas al escribir. El interruptor de arriba decide si se restan del IRPF.</p>
       </div>
     </section>
 

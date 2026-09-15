@@ -947,17 +947,32 @@ function rangoActual() {
 }
 // ---------- GASTOS (deducibles y su efecto en el IRPF) ----------
 function renderGastos() {
+  renderGastosNumeros();
+  const m = getModelo();
+  document.getElementById('gastos-fijos').innerHTML =
+    card('Cuota autónomo', `<span class="num">${f(m.cuotaAutonomo)}</span>`, '€/mes · deducible')
+    + card('Gestoría', `<span class="num">${f(m.deducibles)}</span>`, '€/mes · deducible');
+  pintarGastosDeducLista();
+  const add = document.getElementById('gastos-add');
+  if (add) add.onclick = () => {
+    const l = getGastosDeducibles().slice();
+    l.push({ concepto: '', fecha: hoyISO(), base: 0 });
+    setGastosDeducibles(l); adjuntarDatosUsuario(); pintarGastosDeducLista(); renderGastosNumeros();
+  };
+}
+
+// Solo los números del IRPF: se refresca sin repintar la lista (para no perder el foco al escribir).
+function renderGastosNumeros() {
   const hoy = hoyISO();
   const trimestre = Math.ceil(Number(hoy.slice(5, 7)) / 3);
-  const modeloBase = getModelo();
-  const activo = modeloBase.deducirGastos === true;
+  const m = getModelo();
+  const activo = m.deducirGastos === true;
   const roi = getFiscalChecklist().roi === true ? true : null;
-  const ctx = (deducir) => ({ datos, modelo: { ...modeloBase, deducirGastos: deducir }, hoyISO: hoy, presentados: getFiscalPresentados(), roi });
+  const ctx = (deducir) => ({ datos, modelo: { ...m, deducirGastos: deducir }, hoyISO: hoy, presentados: getFiscalPresentados(), roi });
   const sin = FIS.importeModelo130(ctx(false), `${trimestre}T`);
   const con = FIS.importeModelo130(ctx(true), `${trimestre}T`);
   const actual = activo ? con : sin;
   const ahorro = Math.max(0, (sin.aIngresar || 0) - (con.aIngresar || 0));
-
   document.getElementById('gastos-irpf').innerHTML = `
     <div class="bloque">
       <div class="bloque-title">IRPF de este trimestre (modelo 130)</div>
@@ -971,22 +986,40 @@ function renderGastos() {
         <div class="hero-help">Sin deducir: <strong>${f(sin.aIngresar || 0)}</strong> · con deducibles: <strong>${f(con.aIngresar || 0)}</strong> — ahorrarías <strong>${f(ahorro)}</strong>. Por defecto va sin deducir; tu gestoría confirma qué es deducible de verdad.</div>
       </div>
     </div>`;
-
-  const ded = getGastosDeducibles();
-  const fijos = card('Cuota autónomo', `<span class="num">${f(modeloBase.cuotaAutonomo)}</span>`, '€/mes · deducible fijo')
-    + card('Gestoría', `<span class="num">${f(modeloBase.deducibles)}</span>`, '€/mes · deducible fijo');
-  const items = ded.length
-    ? ded.map((g) => card(esc(g.concepto || 'Gasto'), `<span class="num">${f(Number(g.base) || 0)}</span>`, esc(String(g.fecha || '')))).join('')
-    : '<div class="card"><div class="l">Facturas de compra</div><div class="v mc">Ninguna aún — añade la cámara, etc.</div></div>';
-  document.getElementById('gastos-lista').innerHTML = fijos + items;
-
   const tgl = document.getElementById('gastos-toggle');
-  if (tgl) tgl.addEventListener('change', (e) => {
-    setModelo({ ...getModelo(), deducirGastos: e.target.checked });
-    renderVista('gastos');
+  if (tgl) tgl.onchange = (e) => { setModelo({ ...getModelo(), deducirGastos: e.target.checked }); renderGastosNumeros(); };
+}
+
+// Filas editables de las facturas de compra deducibles, dentro de la propia pestaña Gastos.
+function pintarGastosDeducLista() {
+  const cont = document.getElementById('gastos-editar-lista');
+  const ded = getGastosDeducibles();
+  cont.innerHTML = ded.length
+    ? ded.map((g, i) =>
+        `<div class="gasto-fila" style="grid-template-columns:1fr 130px 90px 34px;margin-bottom:8px"><input data-i="${i}" data-k="concepto" value="${esc(String(g.concepto || ''))}" placeholder="Concepto (cámara…)"/><input data-i="${i}" data-k="fecha" type="date" value="${esc(String(g.fecha || ''))}"/><input data-i="${i}" data-k="base" class="imp" type="number" step="0.01" value="${Number(g.base) || 0}" placeholder="€"/><button class="btn btn-ghost" data-del="${i}" title="Borrar" style="padding:6px 8px">×</button></div>`
+      ).join('')
+    : '<p class="mc">Ninguna todavía. Pulsa "+ Añadir factura" para meter la cámara, etc.</p>';
+  cont.querySelectorAll('input').forEach((inp) => {
+    inp.onchange = () => { setGastosDeducibles(leerGastosDeducLista()); adjuntarDatosUsuario(); renderGastosNumeros(); };
   });
-  const edt = document.getElementById('gastos-editar');
-  if (edt) edt.addEventListener('click', abrirModal);
+  cont.querySelectorAll('button[data-del]').forEach((b) => {
+    b.onclick = () => {
+      const l = getGastosDeducibles().slice();
+      l.splice(Number(b.dataset.del), 1);
+      setGastosDeducibles(l); adjuntarDatosUsuario(); pintarGastosDeducLista(); renderGastosNumeros();
+    };
+  });
+}
+function leerGastosDeducLista() {
+  const filas = {};
+  document.querySelectorAll('#gastos-editar-lista input').forEach((inp) => {
+    const i = inp.dataset.i;
+    filas[i] = filas[i] || { concepto: '', fecha: '', base: 0 };
+    if (inp.dataset.k === 'concepto') filas[i].concepto = inp.value;
+    else if (inp.dataset.k === 'fecha') filas[i].fecha = inp.value;
+    else filas[i].base = parseFloat(inp.value) || 0;
+  });
+  return Object.values(filas).filter((g) => /^\d{4}-\d{2}-\d{2}$/.test(g.fecha));
 }
 
 function renderCalendario() {
@@ -1416,7 +1449,7 @@ function leerDeduciblesEdit() {
 function pintarTabsEdit() {
   const ocultas = getTabsOcultas();
   document.getElementById('g-tabs').innerHTML = [...document.querySelectorAll('.tab')].map((t) =>
-    `<label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer"><input type="checkbox" data-vista="${t.dataset.vista}" ${ocultas.includes(t.dataset.vista) ? 'checked' : ''}/> Ocultar «${esc(t.textContent.trim())}»</label>`
+    `<label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;white-space:nowrap"><input type="checkbox" data-vista="${t.dataset.vista}" ${ocultas.includes(t.dataset.vista) ? 'checked' : ''}/> ${esc(t.textContent.trim())}</label>`
   ).join('');
 }
 function leerTabsEdit() {
