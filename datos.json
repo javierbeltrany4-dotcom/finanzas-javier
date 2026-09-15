@@ -20,8 +20,8 @@
       "comisionPct": 1.49,
       "fijosNegocio": 549.42,
       "miShare": 40,
-      "cuotaAutonomo": 80,
-      "deducibles": 75,
+      "cuotaAutonomo": 0,
+      "deducibles": 0,
       "gastosPersonales": 27,
       "irpf": 20
     },
