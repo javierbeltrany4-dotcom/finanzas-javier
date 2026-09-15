@@ -22,6 +22,7 @@ export const MODELO_DEFAULT = {
   deducibles: 75,        // €/mes de asesoría, se restan ANTES del IRPF
   gastosPersonales: 27,  // €/mes de gimnasio, NO deducible: se resta DESPUÉS
   irpf: 20,              // %
+  deducirGastos: false,  // por defecto el IRPF va en BRUTO; el usuario activa los deducibles en "Gastos"
 };
 
 // Las palancas comparan siempre contra estos objetivos fijos, para que el usuario
@@ -846,10 +847,11 @@ export function rentaFiscalDelAnio(datos, m, hoyISO, tramos = TRAMOS_IRPF, minim
     .filter(enRango)
     .reduce((acc, g) => acc + num(g && g.base, 0), 0);
 
-  // La cuota de autónomo y la asesoría son gasto deducible de los doce meses del año, se
-  // haya facturado mucho o poco. Si aún no ha facturado casi nada la base sale negativa:
-  // es una pérdida real del ejercicio, no un error, y el IRPF de una base negativa es 0.
-  const baseIrpf = retiradoProyectado - (x.cuotaAutonomo + x.deducibles) * 12 - gastosDedYtd;
+  // Los deducibles (cuota autónomo + asesoría anuales + facturas de compra) SOLO se restan si
+  // el usuario lo activa (toggle en la pestaña Gastos). Por defecto el IRPF va en bruto, que es
+  // lo prudente hasta que la gestoría confirme qué es deducible y cuánto.
+  const deducibles = x.deducirGastos ? ((x.cuotaAutonomo + x.deducibles) * 12 + gastosDedYtd) : 0;
+  const baseIrpf = retiradoProyectado - deducibles;
 
   const irpfReal = irpfPorTramos(baseIrpf, tramos, minimoPersonal);
   const retenidoProyectado = Math.max(0, baseIrpf) * (x.irpf / 100);
@@ -955,5 +957,6 @@ export function normalizarModelo(m) {
     deducibles: num(x.deducibles, d.deducibles),
     gastosPersonales: num(x.gastosPersonales, d.gastosPersonales),
     irpf: pct(x.irpf, d.irpf),
+    deducirGastos: x.deducirGastos === true,
   };
 }

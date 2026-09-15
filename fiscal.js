@@ -498,6 +498,7 @@ function contextoFiscal(ctx, hoyISO) {
     datos, config, modelo, hoy, anio, desdeAnio, retiros, facturas, gastosDeducibles, presentados, roi,
     renta, porVentaMia, share: modelo.miShare / 100,
     gastoDeducibleMes: modelo.cuotaAutonomo + modelo.deducibles,
+    deducirGastos: modelo.deducirGastos === true,
   };
 }
 
@@ -806,8 +807,11 @@ function cuota130Acumulada(c, t, anio) {
   }
 
   // Gastos deducibles = el fijo mensual (cuota autónomo + asesoría) por los meses transcurridos
-  // + las facturas de compra apuntadas (cámara, etc.) de esos meses.
-  const gastos = c.gastoDeducibleMes * mesesAcumulados + gastosDeduciblesEntre(c, desde, finTrimestre);
+  // + las facturas de compra apuntadas (cámara, etc.). SOLO se restan si el usuario activó el
+  // toggle "aplicar deducibles" (pestaña Gastos); por defecto el 130 va en bruto.
+  const gastos = c.deducirGastos
+    ? (c.gastoDeducibleMes * mesesAcumulados + gastosDeduciblesEntre(c, desde, finTrimestre))
+    : 0;
   const rendimiento = ingresos - gastos;
   const cuota = Math.max(0, rendimiento) * (PORCENTAJE_130 / 100);
 

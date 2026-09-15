@@ -20,10 +20,11 @@
       "comisionPct": 1.49,
       "fijosNegocio": 549.42,
       "miShare": 40,
-      "cuotaAutonomo": 0,
-      "deducibles": 0,
+      "cuotaAutonomo": 90,
+      "deducibles": 85,
       "gastosPersonales": 27,
-      "irpf": 20
+      "irpf": 20,
+      "deducirGastos": false
     },
     "dubai": {
       "costeAnual": 10000,

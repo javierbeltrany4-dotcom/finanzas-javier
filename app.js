@@ -945,6 +945,50 @@ function rangoActual() {
   }
   return { desde: fecha, hasta: fecha };
 }
+// ---------- GASTOS (deducibles y su efecto en el IRPF) ----------
+function renderGastos() {
+  const hoy = hoyISO();
+  const trimestre = Math.ceil(Number(hoy.slice(5, 7)) / 3);
+  const modeloBase = getModelo();
+  const activo = modeloBase.deducirGastos === true;
+  const roi = getFiscalChecklist().roi === true ? true : null;
+  const ctx = (deducir) => ({ datos, modelo: { ...modeloBase, deducirGastos: deducir }, hoyISO: hoy, presentados: getFiscalPresentados(), roi });
+  const sin = FIS.importeModelo130(ctx(false), `${trimestre}T`);
+  const con = FIS.importeModelo130(ctx(true), `${trimestre}T`);
+  const actual = activo ? con : sin;
+  const ahorro = Math.max(0, (sin.aIngresar || 0) - (con.aIngresar || 0));
+
+  document.getElementById('gastos-irpf').innerHTML = `
+    <div class="bloque">
+      <div class="bloque-title">IRPF de este trimestre (modelo 130)</div>
+      <div class="hero" style="padding:24px">
+        <div class="hero-label">A pagar · ${activo ? 'con tus deducibles' : 'sin deducir nada'}</div>
+        <div class="hero-value num">${f(actual.aIngresar || 0)}</div>
+        <label style="display:flex;align-items:center;gap:10px;margin-top:16px;cursor:pointer;font-size:14px">
+          <input type="checkbox" id="gastos-toggle" ${activo ? 'checked' : ''}/>
+          <span>Aplicar mis gastos deducibles al IRPF</span>
+        </label>
+        <div class="hero-help">Sin deducir: <strong>${f(sin.aIngresar || 0)}</strong> · con deducibles: <strong>${f(con.aIngresar || 0)}</strong> — ahorrarías <strong>${f(ahorro)}</strong>. Por defecto va sin deducir; tu gestoría confirma qué es deducible de verdad.</div>
+      </div>
+    </div>`;
+
+  const ded = getGastosDeducibles();
+  const fijos = card('Cuota autónomo', `<span class="num">${f(modeloBase.cuotaAutonomo)}</span>`, '€/mes · deducible fijo')
+    + card('Gestoría', `<span class="num">${f(modeloBase.deducibles)}</span>`, '€/mes · deducible fijo');
+  const items = ded.length
+    ? ded.map((g) => card(esc(g.concepto || 'Gasto'), `<span class="num">${f(Number(g.base) || 0)}</span>`, esc(String(g.fecha || '')))).join('')
+    : '<div class="card"><div class="l">Facturas de compra</div><div class="v mc">Ninguna aún — añade la cámara, etc.</div></div>';
+  document.getElementById('gastos-lista').innerHTML = fijos + items;
+
+  const tgl = document.getElementById('gastos-toggle');
+  if (tgl) tgl.addEventListener('change', (e) => {
+    setModelo({ ...getModelo(), deducirGastos: e.target.checked });
+    renderVista('gastos');
+  });
+  const edt = document.getElementById('gastos-editar');
+  if (edt) edt.addEventListener('click', abrirModal);
+}
+
 function renderCalendario() {
   const sp = split();
   const cab = document.getElementById('cal-cab');
@@ -1191,6 +1235,7 @@ function renderVista(v) {
   else if (v === 'historico') renderHistorico();
   else if (v === 'retiros') renderRetiros();
   else if (v === 'midinero') renderMiDinero();
+  else if (v === 'gastos') renderGastos();
   else if (v === 'calendario') renderCalendario();
   else if (v === 'patrimonio') {
     const mv = modeloVivo();

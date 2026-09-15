@@ -50,6 +50,7 @@
       <button class="tab" data-vista="historico">Histórico</button>
       <button class="tab" data-vista="retiros">Retiros</button>
       <button class="tab" data-vista="midinero">Mi dinero</button>
+      <button class="tab" data-vista="gastos">Gastos</button>
       <button class="tab" data-vista="calendario">Calendario</button>
       <button class="tab" data-vista="patrimonio">Mi patrimonio</button>
       <!-- "Mi capital" va pegada a "Mi patrimonio" a propósito: una dice lo que tiene y la
@@ -309,6 +310,17 @@
       <div class="bloque">
         <div class="bloque-title">Resumen</div>
         <div class="grid grid-4" id="pat-totales"></div>
+      </div>
+    </section>
+
+    <!-- GASTOS -->
+    <section class="vista" id="v-gastos">
+      <div id="gastos-irpf"></div>
+      <div class="bloque">
+        <div class="bloque-title">Mis gastos deducibles</div>
+        <div class="grid grid-3" id="gastos-lista"></div>
+        <button class="btn btn-ghost" id="gastos-editar" style="margin-top:12px">+ Añadir / editar deducibles</button>
+        <p class="mc" style="margin-top:10px">Aquí van tus facturas de compra (cámara, etc.) y tus fijos deducibles (cuota autónomo + gestoría). Con el interruptor de arriba decides si se restan del IRPF.</p>
       </div>
     </section>
 
