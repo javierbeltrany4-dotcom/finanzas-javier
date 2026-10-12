@@ -1,5 +1,5 @@
 {
-  "fuenteDatos": "tradinverso.json",
+  "fuenteDatos": "https://script.google.com/macros/s/AKfycbwLmDItODL0OGVF1h4XyCS0q4rbUeeiIfCCtvCfkIRw9k6hT5qNUqzD7UMuB_7OEuQD/exec",
   "anioBase": 2026,
   "config": {
     "split": { "yo": 0.40, "david": 0.60 },

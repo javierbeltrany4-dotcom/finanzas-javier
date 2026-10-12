@@ -3,10 +3,12 @@
 // Antes era caché primero: rápido, pero te enseñaba la versión vieja aunque hubiera una nueva,
 // y había que recargar dos veces para verla. Ahora, si hay internet, siempre ves lo último;
 // la caché solo entra cuando no hay red o cuando tarda demasiado.
-// v18: cambió la fuente de datos (Apps Script muerto -> tradinverso.json). Hay que subir la
-// versión SÍ O SÍ al cambiarla: si no, el service worker sigue sirviendo el app.js viejo, que
-// llama al Apps Script antiguo (que responde, pero con octubre a 0) y parece que "no actualiza".
-const CACHE = 'mis-finanzas-v18';
+// OJO: al cambiar la fuente de datos hay que subir esta versión SÍ O SÍ. Si no, el service
+// worker sigue sirviendo el app.js viejo, que pide los datos donde ya no están, y parece que
+// la app "no actualiza" cuando en realidad el despliegue fue bien. Pasó en la v18.
+// v18: Apps Script antiguo (muerto, octubre a 0) -> tradinverso.json del repo.
+// v19: -> puente Apps Script nuevo en vivo, con tradinverso.json ya solo como respaldo.
+const CACHE = 'mis-finanzas-v19';
 const SHELL = [
   './', './index.html', './style.css', './app.js', './calculos.js', './tradinverso.js',
   './datos.json', './tradinverso.json',
