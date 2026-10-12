@@ -3,9 +3,13 @@
 // Antes era caché primero: rápido, pero te enseñaba la versión vieja aunque hubiera una nueva,
 // y había que recargar dos veces para verla. Ahora, si hay internet, siempre ves lo último;
 // la caché solo entra cuando no hay red o cuando tarda demasiado.
-const CACHE = 'mis-finanzas-v17';
+// v18: cambió la fuente de datos (Apps Script muerto -> tradinverso.json). Hay que subir la
+// versión SÍ O SÍ al cambiarla: si no, el service worker sigue sirviendo el app.js viejo, que
+// llama al Apps Script antiguo (que responde, pero con octubre a 0) y parece que "no actualiza".
+const CACHE = 'mis-finanzas-v18';
 const SHELL = [
   './', './index.html', './style.css', './app.js', './calculos.js', './tradinverso.js',
+  './datos.json', './tradinverso.json',
   './patrimonio.js', './vista-patrimonio.js',
   './objetivo.js', './vista-objetivo.js',
   './residencia.js', './vista-residencia.js', './bali.js',
