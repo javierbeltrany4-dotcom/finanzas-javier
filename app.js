@@ -530,11 +530,11 @@ async function cargarNegocio() {
   // Intenta en vivo y reintenta 1 vez: el 1er intento "calienta" el Apps Script (frío = lento).
   let raw = null;
   for (let intento = 1; intento <= 2; intento++) {
-    try { raw = await cargarTradinverso(config.apiUrl); break; }
+    try { raw = await cargarTradinverso(config.fuenteDatos || 'tradinverso.json'); break; }
     catch (e) { if (intento === 1) { est.textContent = 'Reintentando…'; } }
   }
   if (raw) {
-    datos = parseTradinverso(raw, config.anioBase);
+    datos = parseTradinverso(raw);
     ultimaActualizacion = new Date().toISOString();
     desdeCache = false;
     localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: ultimaActualizacion, datos }));

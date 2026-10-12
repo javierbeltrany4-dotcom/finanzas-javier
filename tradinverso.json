@@ -1,0 +1,1690 @@
+{
+ "actualizado": "2026-10-12 13:48",
+ "fuente": "Sheet de respaldo de conta.tradinverso.com (sin datos personales)",
+ "ingresos": [
+  {
+   "mes": "2026-02",
+   "beneficio": 2500.0
+  },
+  {
+   "mes": "2026-03",
+   "beneficio": 8897.03
+  },
+  {
+   "mes": "2026-04",
+   "beneficio": 8234.52
+  },
+  {
+   "mes": "2026-05",
+   "beneficio": -368.3
+  },
+  {
+   "mes": "2026-06",
+   "beneficio": 3805.72
+  },
+  {
+   "mes": "2026-07",
+   "beneficio": 4472.24
+  },
+  {
+   "mes": "2026-08",
+   "beneficio": 14674.89
+  },
+  {
+   "mes": "2026-09",
+   "beneficio": 31626.55
+  },
+  {
+   "mes": "2026-10",
+   "beneficio": 9551.05
+  }
+ ],
+ "retiros": [
+  {
+   "fecha": "2026-03-25",
+   "total": 1000.0,
+   "concepto": "Cripto · Reparto Binance"
+  },
+  {
+   "fecha": "2026-04-23",
+   "total": 1370.0,
+   "concepto": "Cripto · Reparto Binance"
+  },
+  {
+   "fecha": "2026-04-26",
+   "total": 512.0,
+   "concepto": "Cripto · Reparto Binance"
+  },
+  {
+   "fecha": "2026-05-09",
+   "total": 7500.0,
+   "concepto": "Banco · 2026-0001"
+  },
+  {
+   "fecha": "2026-07-06",
+   "total": 2000.0,
+   "concepto": "Banco · 2026-0002"
+  },
+  {
+   "fecha": "2026-07-22",
+   "total": 1050.0,
+   "concepto": "Cripto · Reparto Bitbase"
+  },
+  {
+   "fecha": "2026-07-30",
+   "total": 2000.0,
+   "concepto": "Banco · 2026-0003"
+  },
+  {
+   "fecha": "2026-08-08",
+   "total": 3500.0,
+   "concepto": "Banco · 2026-0004"
+  },
+  {
+   "fecha": "2026-08-09",
+   "total": 689.66,
+   "concepto": "Cripto · Bitbase"
+  },
+  {
+   "fecha": "2026-08-17",
+   "total": 200.0,
+   "concepto": "Cripto · Bizum"
+  },
+  {
+   "fecha": "2026-08-19",
+   "total": 375.0,
+   "concepto": "Cripto · Bizum"
+  },
+  {
+   "fecha": "2026-08-21",
+   "total": 1300.0,
+   "concepto": "Banco · 2026-008"
+  },
+  {
+   "fecha": "2026-09-05",
+   "total": 3875.0,
+   "concepto": "Cripto · Bitbase"
+  },
+  {
+   "fecha": "2026-09-05",
+   "total": 8000.0,
+   "concepto": "Banco · 2026-0006"
+  },
+  {
+   "fecha": "2026-09-08",
+   "total": 948.28,
+   "concepto": "Cripto · Bitbase"
+  },
+  {
+   "fecha": "2026-09-15",
+   "total": 692.0,
+   "concepto": "Cripto · Bitbase"
+  },
+  {
+   "fecha": "2026-09-18",
+   "total": 3500.0,
+   "concepto": "Banco · 2026-0007"
+  },
+  {
+   "fecha": "2026-09-19",
+   "total": 375.0,
+   "concepto": "Cripto · Cesar por Bizum"
+  },
+  {
+   "fecha": "2026-09-20",
+   "total": 646.55,
+   "concepto": "Cripto · Bitbase"
+  },
+  {
+   "fecha": "2026-09-24",
+   "total": 1300.0,
+   "concepto": "Cripto · Bitbase"
+  },
+  {
+   "fecha": "2026-09-25",
+   "total": 4000.0,
+   "concepto": "Banco"
+  },
+  {
+   "fecha": "2026-09-26",
+   "total": 600.0,
+   "concepto": "Cripto · Se reparten los 600 que me ha dado Miguel en efectivo, le hago 240 en Bizum a Javier."
+  },
+  {
+   "fecha": "2026-09-28",
+   "total": 1300.0,
+   "concepto": "Cripto · Via bitbase para phanter"
+  },
+  {
+   "fecha": "2026-10-01",
+   "total": 1300.0,
+   "concepto": "Cripto · via bitbase viejo para bitbase javi y para wirex david"
+  },
+  {
+   "fecha": "2026-10-04",
+   "total": 475.0,
+   "concepto": "Cripto"
+  },
+  {
+   "fecha": "2026-10-12",
+   "total": 2250.0,
+   "concepto": "Cripto · 1000 usdt javi y 1500 usdc david desde la cuenta nueva de bitbase."
+  },
+  {
+   "fecha": "2026-10-12",
+   "total": 800.0,
+   "concepto": "Cripto · 350 usdc a javi y 525 usdc a david de la cuenta antigua."
+  },
+  {
+   "fecha": "2026-10-12",
+   "total": 6000.0,
+   "concepto": "Banco · Factura de Javier 0009"
+  }
+ ],
+ "ventas": [
+  {
+   "fecha": "2026-02-25",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 500.0,
+   "neto": 500.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-02-25",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 2000.0,
+   "neto": 2000.0,
+   "metodo": "Transferencia"
+  },
+  {
+   "fecha": "2026-03-02",
+   "cliente": "",
+   "pais": "AR",
+   "bruto": 1000.0,
+   "neto": 1000.0,
+   "metodo": "PayPal"
+  },
+  {
+   "fecha": "2026-03-03",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Transferencia"
+  },
+  {
+   "fecha": "2026-03-09",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Transferencia"
+  },
+  {
+   "fecha": "2026-03-19",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Stripe"
+  },
+  {
+   "fecha": "2026-03-19",
+   "cliente": "",
+   "pais": "AR",
+   "bruto": 1000.0,
+   "neto": 1000.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-03-23",
+   "cliente": "",
+   "pais": "AR",
+   "bruto": 1000.0,
+   "neto": 1000.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-03-30",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Stripe"
+  },
+  {
+   "fecha": "2026-03-30",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Stripe"
+  },
+  {
+   "fecha": "2026-04-08",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Stripe"
+  },
+  {
+   "fecha": "2026-04-16",
+   "cliente": "",
+   "pais": "AR",
+   "bruto": 1497.0,
+   "neto": 1497.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-04-18",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Stripe"
+  },
+  {
+   "fecha": "2026-04-20",
+   "cliente": "",
+   "pais": "AR",
+   "bruto": 1530.0,
+   "neto": 1530.0,
+   "metodo": "Stripe"
+  },
+  {
+   "fecha": "2026-04-21",
+   "cliente": "",
+   "pais": "Costa Rica",
+   "bruto": 1530.0,
+   "neto": 1530.0,
+   "metodo": "Stripe"
+  },
+  {
+   "fecha": "2026-04-23",
+   "cliente": "",
+   "pais": "EEUU",
+   "bruto": 1497.0,
+   "neto": 1497.0,
+   "metodo": "Stripe"
+  },
+  {
+   "fecha": "2026-06-01",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 510.0,
+   "neto": 510.0,
+   "metodo": "Transferencia"
+  },
+  {
+   "fecha": "2026-06-08",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Transferencia"
+  },
+  {
+   "fecha": "2026-06-09",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Stripe"
+  },
+  {
+   "fecha": "2026-06-23",
+   "cliente": "",
+   "pais": "EEUU",
+   "bruto": 1497.0,
+   "neto": 1497.0,
+   "metodo": "Stripe"
+  },
+  {
+   "fecha": "2026-07-01",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Sequra"
+  },
+  {
+   "fecha": "2026-07-13",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1497.0,
+   "metodo": "Transferencia"
+  },
+  {
+   "fecha": "2026-07-22",
+   "cliente": "",
+   "pais": "Chile",
+   "bruto": 1450.0,
+   "neto": 1450.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-07-28",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Transferencia"
+  },
+  {
+   "fecha": "2026-08-04",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Transferencia"
+  },
+  {
+   "fecha": "2026-08-04",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Sequra"
+  },
+  {
+   "fecha": "2026-08-06",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Sequra"
+  },
+  {
+   "fecha": "2026-08-07",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Sequra"
+  },
+  {
+   "fecha": "2026-08-10",
+   "cliente": "",
+   "pais": "AR",
+   "bruto": 1299.87,
+   "neto": 1299.87,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-08-19",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 200.0,
+   "neto": 200.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-08-19",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1500.0,
+   "neto": 1500.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-08-21",
+   "cliente": "",
+   "pais": "Portugal",
+   "bruto": 1350.0,
+   "neto": 1350.0,
+   "metodo": "Transferencia"
+  },
+  {
+   "fecha": "2026-08-24",
+   "cliente": "",
+   "pais": "Alemania",
+   "bruto": 600.0,
+   "neto": 600.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-08-24",
+   "cliente": "",
+   "pais": "Alemania",
+   "bruto": 900.0,
+   "neto": 756.3,
+   "metodo": "Stripe"
+  },
+  {
+   "fecha": "2026-08-26",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Sequra"
+  },
+  {
+   "fecha": "2026-08-26",
+   "cliente": "",
+   "pais": "Suiza",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Stripe"
+  },
+  {
+   "fecha": "2026-08-28",
+   "cliente": "",
+   "pais": "Colombia",
+   "bruto": 1290.0,
+   "neto": 1290.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-08-30",
+   "cliente": "",
+   "pais": "EEUU",
+   "bruto": 1497.0,
+   "neto": 1497.0,
+   "metodo": "Stripe"
+  },
+  {
+   "fecha": "2026-09-01",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Sequra"
+  },
+  {
+   "fecha": "2026-09-01",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Sequra"
+  },
+  {
+   "fecha": "2026-09-01",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Transferencia"
+  },
+  {
+   "fecha": "2026-09-02",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1600.0,
+   "neto": 1322.31,
+   "metodo": "Stripe"
+  },
+  {
+   "fecha": "2026-09-02",
+   "cliente": "",
+   "pais": "EEUU",
+   "bruto": 1290.0,
+   "neto": 1290.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-09-03",
+   "cliente": "",
+   "pais": "Bolivia",
+   "bruto": 1290.0,
+   "neto": 1290.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-09-03",
+   "cliente": "",
+   "pais": "Peru",
+   "bruto": 1425.0,
+   "neto": 1425.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-09-04",
+   "cliente": "",
+   "pais": "El Salvador",
+   "bruto": 1290.0,
+   "neto": 1290.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-09-07",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Sequra"
+  },
+  {
+   "fecha": "2026-09-07",
+   "cliente": "",
+   "pais": "Perú",
+   "bruto": 1320.21,
+   "neto": 1320.21,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-09-10",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Sequra"
+  },
+  {
+   "fecha": "2026-09-10",
+   "cliente": "",
+   "pais": "USA",
+   "bruto": 1300.0,
+   "neto": 1300.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-09-11",
+   "cliente": "",
+   "pais": "Mexico",
+   "bruto": 1497.0,
+   "neto": 1497.0,
+   "metodo": "Stripe"
+  },
+  {
+   "fecha": "2026-09-13",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 124.75,
+   "neto": 103.1,
+   "metodo": "Sequra"
+  },
+  {
+   "fecha": "2026-09-14",
+   "cliente": "",
+   "pais": "Holanda",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Transferencia"
+  },
+  {
+   "fecha": "2026-09-15",
+   "cliente": "",
+   "pais": "AR",
+   "bruto": 1425.0,
+   "neto": 1425.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-09-15",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Sequra"
+  },
+  {
+   "fecha": "2026-09-17",
+   "cliente": "",
+   "pais": "AR",
+   "bruto": 1590.0,
+   "neto": 1590.0,
+   "metodo": "Transferencia"
+  },
+  {
+   "fecha": "2026-09-20",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Stripe"
+  },
+  {
+   "fecha": "2026-09-20",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Sequra"
+  },
+  {
+   "fecha": "2026-09-22",
+   "cliente": "",
+   "pais": "AR",
+   "bruto": 435.0,
+   "neto": 435.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-09-24",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Stripe"
+  },
+  {
+   "fecha": "2026-09-24",
+   "cliente": "",
+   "pais": "AR",
+   "bruto": 1300.0,
+   "neto": 1300.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-09-25",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Sequra"
+  },
+  {
+   "fecha": "2026-09-25",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Transferencia"
+  },
+  {
+   "fecha": "2026-09-28",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1300.0,
+   "neto": 1300.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-09-30",
+   "cliente": "",
+   "pais": "México",
+   "bruto": 1300.0,
+   "neto": 1300.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-10-04",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1497.0,
+   "neto": 1237.19,
+   "metodo": "Sequra"
+  },
+  {
+   "fecha": "2026-10-06",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1500.0,
+   "neto": 1239.67,
+   "metodo": "Transferencia"
+  },
+  {
+   "fecha": "2026-10-07",
+   "cliente": "",
+   "pais": "Perú",
+   "bruto": 1650.0,
+   "neto": 1650.0,
+   "metodo": "Stripe"
+  },
+  {
+   "fecha": "2026-10-08",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1500.0,
+   "neto": 1239.67,
+   "metodo": "Sequra"
+  },
+  {
+   "fecha": "2026-10-10",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1500.0,
+   "neto": 1500.0,
+   "metodo": "Stripe"
+  },
+  {
+   "fecha": "2026-10-11",
+   "cliente": "",
+   "pais": "Argentina",
+   "bruto": 1410.0,
+   "neto": 1410.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-10-11",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1300.0,
+   "neto": 1300.0,
+   "metodo": "Cripto (USDC)"
+  },
+  {
+   "fecha": "2026-10-12",
+   "cliente": "",
+   "pais": "España",
+   "bruto": 1500.0,
+   "neto": 1239.67,
+   "metodo": "Stripe"
+  }
+ ],
+ "gastosNegocio": [
+  {
+   "fecha": "2026-03-02",
+   "concepto": "Comisión PayPal",
+   "categoria": "Comisión PayPal",
+   "proveedor": "Paypal",
+   "total": 51.19
+  },
+  {
+   "fecha": "2026-03-10",
+   "concepto": "Thinkific mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Thinkific",
+   "total": 58.18
+  },
+  {
+   "fecha": "2026-03-12",
+   "concepto": "Miro mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Miro",
+   "total": 11.9
+  },
+  {
+   "fecha": "2026-03-16",
+   "concepto": "Discord mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Discord",
+   "total": 10.17
+  },
+  {
+   "fecha": "2026-03-27",
+   "concepto": "Claude Pro mensual",
+   "categoria": "Inteligencia Artificial",
+   "proveedor": "Claude",
+   "total": 21.82
+  },
+  {
+   "fecha": "2026-03-29",
+   "concepto": "Zoom anual",
+   "categoria": "Plataformas",
+   "proveedor": "Zoom",
+   "total": 135.66
+  },
+  {
+   "fecha": "2026-04-05",
+   "concepto": "Comisión Stripe",
+   "categoria": "Comisión Stripe",
+   "proveedor": "Stripe",
+   "total": 45.18
+  },
+  {
+   "fecha": "2026-04-10",
+   "concepto": "Thinkific mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Thinkific",
+   "total": 58.18
+  },
+  {
+   "fecha": "2026-04-12",
+   "concepto": "Miro mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Miro",
+   "total": 11.96
+  },
+  {
+   "fecha": "2026-04-14",
+   "concepto": "Reels Método C3",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 35.0
+  },
+  {
+   "fecha": "2026-04-19",
+   "concepto": "Meta Verified Instagram",
+   "categoria": "Marketing",
+   "proveedor": "Meta",
+   "total": 16.99
+  },
+  {
+   "fecha": "2026-04-20",
+   "concepto": "Discord mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Discord",
+   "total": 10.17
+  },
+  {
+   "fecha": "2026-04-24",
+   "concepto": "Reels Programa",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 35.0
+  },
+  {
+   "fecha": "2026-04-27",
+   "concepto": "Reels Álvaro",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 22.0
+  },
+  {
+   "fecha": "2026-04-27",
+   "concepto": "GoHighLevel mensual",
+   "categoria": "Marketing",
+   "proveedor": "GoHighLevel",
+   "total": 12.0
+  },
+  {
+   "fecha": "2026-04-27",
+   "concepto": "Manychat mensual",
+   "categoria": "Marketing",
+   "proveedor": "Manychat",
+   "total": 12.86
+  },
+  {
+   "fecha": "2026-04-28",
+   "concepto": "Claude Pro mensual",
+   "categoria": "Inteligencia Artificial",
+   "proveedor": "Claude",
+   "total": 21.42
+  },
+  {
+   "fecha": "2026-04-29",
+   "concepto": "Manychat mensual",
+   "categoria": "Marketing",
+   "proveedor": "Manychat",
+   "total": 13.1
+  },
+  {
+   "fecha": "2026-05-05",
+   "concepto": "Comisión Stripe",
+   "categoria": "Comisión Stripe",
+   "proveedor": "Stripe",
+   "total": 137.36
+  },
+  {
+   "fecha": "2026-05-07",
+   "concepto": "Claude Max mensual",
+   "categoria": "Inteligencia Artificial",
+   "proveedor": "Claude",
+   "total": 77.95
+  },
+  {
+   "fecha": "2026-05-10",
+   "concepto": "Thinkific mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Thinkific",
+   "total": 58.18
+  },
+  {
+   "fecha": "2026-05-12",
+   "concepto": "Miro mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Miro",
+   "total": 10.0
+  },
+  {
+   "fecha": "2026-05-17",
+   "concepto": "Google One mensual",
+   "categoria": "Software",
+   "proveedor": "Google",
+   "total": 0.75
+  },
+  {
+   "fecha": "2026-05-18",
+   "concepto": "N8N mensual",
+   "categoria": "Software",
+   "proveedor": "N8N",
+   "total": 24.0
+  },
+  {
+   "fecha": "2026-05-19",
+   "concepto": "Meta Verified Instagram",
+   "categoria": "Marketing",
+   "proveedor": "Meta",
+   "total": 16.99
+  },
+  {
+   "fecha": "2026-05-20",
+   "concepto": "Discord mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Discord",
+   "total": 10.17
+  },
+  {
+   "fecha": "2026-05-20",
+   "concepto": "Calendly mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Calendy",
+   "total": 12.0
+  },
+  {
+   "fecha": "2026-05-20",
+   "concepto": "Hostinger hosting mensual",
+   "categoria": "Hosting/Dominios",
+   "proveedor": "Hostinger",
+   "total": 7.99
+  },
+  {
+   "fecha": "2026-05-27",
+   "concepto": "Manychat mensual",
+   "categoria": "Marketing",
+   "proveedor": "Manychat",
+   "total": 12.91
+  },
+  {
+   "fecha": "2026-06-04",
+   "concepto": "Créditos IA",
+   "categoria": "Créditos IA",
+   "proveedor": "OpenRouter",
+   "total": 50.0
+  },
+  {
+   "fecha": "2026-06-05",
+   "concepto": "Comisión Stripe",
+   "categoria": "Comisión Stripe",
+   "proveedor": "Stripe",
+   "total": 103.24
+  },
+  {
+   "fecha": "2026-06-07",
+   "concepto": "Reels semanales",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 60.0
+  },
+  {
+   "fecha": "2026-06-07",
+   "concepto": "Comisión Stripe",
+   "categoria": "Comisión Stripe",
+   "proveedor": "Stripe",
+   "total": 89.22
+  },
+  {
+   "fecha": "2026-06-07",
+   "concepto": "Claude Max mensual",
+   "categoria": "Inteligencia Artificial",
+   "proveedor": "Claude",
+   "total": 91.17
+  },
+  {
+   "fecha": "2026-06-10",
+   "concepto": "Thinkific mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Thinkific",
+   "total": 58.18
+  },
+  {
+   "fecha": "2026-06-11",
+   "concepto": "Créditos IA",
+   "categoria": "Créditos IA",
+   "proveedor": "OpenRouter",
+   "total": 50.0
+  },
+  {
+   "fecha": "2026-06-12",
+   "concepto": "Miro mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Miro",
+   "total": 10.0
+  },
+  {
+   "fecha": "2026-06-15",
+   "concepto": "Google One mensual",
+   "categoria": "Software",
+   "proveedor": "Google",
+   "total": 0.75
+  },
+  {
+   "fecha": "2026-06-16",
+   "concepto": "Reels semanales",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 38.0
+  },
+  {
+   "fecha": "2026-06-19",
+   "concepto": "Meta Verified Instagram",
+   "categoria": "Marketing",
+   "proveedor": "Meta",
+   "total": 16.99
+  },
+  {
+   "fecha": "2026-06-20",
+   "concepto": "Calendly mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Calendy",
+   "total": 12.0
+  },
+  {
+   "fecha": "2026-06-20",
+   "concepto": "Discord mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Discord",
+   "total": 10.17
+  },
+  {
+   "fecha": "2026-06-20",
+   "concepto": "Hostinger hosting mensual",
+   "categoria": "Hosting/Dominios",
+   "proveedor": "Hostinger",
+   "total": 17.49
+  },
+  {
+   "fecha": "2026-06-21",
+   "concepto": "Reels semanales",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 35.0
+  },
+  {
+   "fecha": "2026-06-27",
+   "concepto": "Manychat mensual",
+   "categoria": "Marketing",
+   "proveedor": "Manychat",
+   "total": 13.45
+  },
+  {
+   "fecha": "2026-06-28",
+   "concepto": "Reels semanales",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 20.0
+  },
+  {
+   "fecha": "2026-07-01",
+   "concepto": "Hike API créditos",
+   "categoria": "Créditos IA",
+   "proveedor": "Hike",
+   "total": 19.0
+  },
+  {
+   "fecha": "2026-07-04",
+   "concepto": "Turboscribe mensual",
+   "categoria": "Inteligencia Artificial",
+   "proveedor": "Turboscribe",
+   "total": 18.75
+  },
+  {
+   "fecha": "2026-07-05",
+   "concepto": "Reels semanales",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 25.0
+  },
+  {
+   "fecha": "2026-07-08",
+   "concepto": "Claude Max mensual",
+   "categoria": "Inteligencia Artificial",
+   "proveedor": "Claude",
+   "total": 179.68
+  },
+  {
+   "fecha": "2026-07-10",
+   "concepto": "Miro mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Miro",
+   "total": 10.0
+  },
+  {
+   "fecha": "2026-07-10",
+   "concepto": "Thinkific publicidad",
+   "categoria": "Plataformas",
+   "proveedor": "Thinkific",
+   "total": 48.89
+  },
+  {
+   "fecha": "2026-07-12",
+   "concepto": "Reels semanales",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 28.0
+  },
+  {
+   "fecha": "2026-07-15",
+   "concepto": "Créditos IA",
+   "categoria": "Créditos IA",
+   "proveedor": "OpenRouter",
+   "total": 50.0
+  },
+  {
+   "fecha": "2026-07-15",
+   "concepto": "Google One mensual",
+   "categoria": "Software",
+   "proveedor": "Google",
+   "total": 0.75
+  },
+  {
+   "fecha": "2026-07-19",
+   "concepto": "Meta Verified Instagram",
+   "categoria": "Marketing",
+   "proveedor": "Meta",
+   "total": 16.99
+  },
+  {
+   "fecha": "2026-07-20",
+   "concepto": "Hike API créditos",
+   "categoria": "Créditos IA",
+   "proveedor": "Hike",
+   "total": 19.0
+  },
+  {
+   "fecha": "2026-07-20",
+   "concepto": "Discord mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Discord",
+   "total": 10.17
+  },
+  {
+   "fecha": "2026-07-20",
+   "concepto": "Calendly mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Calendy",
+   "total": 12.0
+  },
+  {
+   "fecha": "2026-07-20",
+   "concepto": "Hostinger hosting mensual",
+   "categoria": "Hosting/Dominios",
+   "proveedor": "Hostinger",
+   "total": 17.49
+  },
+  {
+   "fecha": "2026-07-21",
+   "concepto": "Reels semanales",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 48.0
+  },
+  {
+   "fecha": "2026-07-22",
+   "concepto": "VSL",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 130.0
+  },
+  {
+   "fecha": "2026-07-24",
+   "concepto": "Hostinger Business anual",
+   "categoria": "Hosting/Dominios",
+   "proveedor": "Hostinger",
+   "total": 60.0
+  },
+  {
+   "fecha": "2026-07-25",
+   "concepto": "Hostinger 50 dominios",
+   "categoria": "Hosting/Dominios",
+   "proveedor": "Hostinger",
+   "total": 58.0
+  },
+  {
+   "fecha": "2026-07-27",
+   "concepto": "Reels semanales",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 51.0
+  },
+  {
+   "fecha": "2026-07-27",
+   "concepto": "Manychat mensual",
+   "categoria": "Marketing",
+   "proveedor": "Manychat",
+   "total": 13.45
+  },
+  {
+   "fecha": "2026-07-28",
+   "concepto": "Hostinger Business anual",
+   "categoria": "Hosting/Dominios",
+   "proveedor": "Hostinger",
+   "total": 60.0
+  },
+  {
+   "fecha": "2026-07-28",
+   "concepto": "Hostinger 50 dominios",
+   "categoria": "Hosting/Dominios",
+   "proveedor": "Hostinger",
+   "total": 58.0
+  },
+  {
+   "fecha": "2026-07-31",
+   "concepto": "Comisión Sequra",
+   "categoria": "Comisión Sequra",
+   "proveedor": "Sequra",
+   "total": 14.97
+  },
+  {
+   "fecha": "2026-08-02",
+   "concepto": "Reels semanales",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 47.0
+  },
+  {
+   "fecha": "2026-08-04",
+   "concepto": "Turboscribe mensual",
+   "categoria": "Inteligencia Artificial",
+   "proveedor": "Turboscribe",
+   "total": 18.75
+  },
+  {
+   "fecha": "2026-08-04",
+   "concepto": "Mailerfind Unlimited",
+   "categoria": "Marketing",
+   "proveedor": "Mailerfind",
+   "total": 598.2
+  },
+  {
+   "fecha": "2026-08-07",
+   "concepto": "Comisión Stripe",
+   "categoria": "Comisión Stripe",
+   "proveedor": "Stripe",
+   "total": 18.37
+  },
+  {
+   "fecha": "2026-08-07",
+   "concepto": "Claude Max mensual",
+   "categoria": "Inteligencia Artificial",
+   "proveedor": "Claude",
+   "total": 180.0
+  },
+  {
+   "fecha": "2026-08-08",
+   "concepto": "Google One mensual",
+   "categoria": "Software",
+   "proveedor": "Google",
+   "total": 2.99
+  },
+  {
+   "fecha": "2026-08-09",
+   "concepto": "Reels semanales",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 54.0
+  },
+  {
+   "fecha": "2026-08-11",
+   "concepto": "Miro mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Miro",
+   "total": 10.0
+  },
+  {
+   "fecha": "2026-08-12",
+   "concepto": "Cap mensual",
+   "categoria": "Software",
+   "proveedor": "CAP",
+   "total": 10.81
+  },
+  {
+   "fecha": "2026-08-12",
+   "concepto": "Thinkific publicidad",
+   "categoria": "Plataformas",
+   "proveedor": "Thinkific",
+   "total": 48.89
+  },
+  {
+   "fecha": "2026-08-12",
+   "concepto": "SmartLead mensual",
+   "categoria": "Marketing",
+   "proveedor": "SmartLead",
+   "total": 41.5
+  },
+  {
+   "fecha": "2026-08-20",
+   "concepto": "Calendly mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Calendy",
+   "total": 12.0
+  },
+  {
+   "fecha": "2026-08-20",
+   "concepto": "Discord mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Discord",
+   "total": 10.17
+  },
+  {
+   "fecha": "2026-08-20",
+   "concepto": "Hostinger hosting mensual",
+   "categoria": "Hosting/Dominios",
+   "proveedor": "Hostinger",
+   "total": 17.49
+  },
+  {
+   "fecha": "2026-08-20",
+   "concepto": "Meta Verified Instagram",
+   "categoria": "Marketing",
+   "proveedor": "Meta",
+   "total": 16.99
+  },
+  {
+   "fecha": "2026-08-22",
+   "concepto": "Vercel mensual",
+   "categoria": "Software",
+   "proveedor": "Vercel",
+   "total": 17.57
+  },
+  {
+   "fecha": "2026-08-23",
+   "concepto": "Reels semanales",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 54.0
+  },
+  {
+   "fecha": "2026-08-27",
+   "concepto": "Manychat mensual",
+   "categoria": "Marketing",
+   "proveedor": "Manychat",
+   "total": 33.36
+  },
+  {
+   "fecha": "2026-08-28",
+   "concepto": "Mail y web",
+   "categoria": "Hosting/Dominios",
+   "proveedor": "Hostinger",
+   "total": 3.33
+  },
+  {
+   "fecha": "2026-08-29",
+   "concepto": "Reels semanales",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 46.0
+  },
+  {
+   "fecha": "2026-09-01",
+   "concepto": "Reembolso Tony",
+   "categoria": "Otros",
+   "proveedor": "Varios",
+   "total": 100.0
+  },
+  {
+   "fecha": "2026-09-01",
+   "concepto": "Mantenimiento Fyrst",
+   "categoria": "Otros",
+   "proveedor": "Varios",
+   "total": 6.0
+  },
+  {
+   "fecha": "2026-09-01",
+   "concepto": "Amazon Pablo",
+   "categoria": "Otros",
+   "proveedor": "Amazon",
+   "total": 100.0
+  },
+  {
+   "fecha": "2026-09-04",
+   "concepto": "Comisión Sequra",
+   "categoria": "Comisión Sequra",
+   "proveedor": "Sequra",
+   "total": 59.98
+  },
+  {
+   "fecha": "2026-09-04",
+   "concepto": "Comisión Stripe",
+   "categoria": "Comisión Stripe",
+   "proveedor": "Stripe",
+   "total": 107.05
+  },
+  {
+   "fecha": "2026-09-06",
+   "concepto": "Reels semanales",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 36.0
+  },
+  {
+   "fecha": "2026-09-06",
+   "concepto": "OpenRouter créditos",
+   "categoria": "Créditos IA",
+   "proveedor": "OpenRouter",
+   "total": 9.6
+  },
+  {
+   "fecha": "2026-09-06",
+   "concepto": "Claude Max mensual",
+   "categoria": "Inteligencia Artificial",
+   "proveedor": "Claude",
+   "total": 180.0
+  },
+  {
+   "fecha": "2026-09-07",
+   "concepto": "Claude Max mensual",
+   "categoria": "Inteligencia Artificial",
+   "proveedor": "Claude",
+   "total": 180.0
+  },
+  {
+   "fecha": "2026-09-10",
+   "concepto": "Miro mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Miro",
+   "total": 10.0
+  },
+  {
+   "fecha": "2026-09-11",
+   "concepto": "Google One mensual",
+   "categoria": "Software",
+   "proveedor": "Google",
+   "total": 2.99
+  },
+  {
+   "fecha": "2026-09-11",
+   "concepto": "Cap mensual",
+   "categoria": "Software",
+   "proveedor": "CAP",
+   "total": 10.81
+  },
+  {
+   "fecha": "2026-09-11",
+   "concepto": "Thinkific publicidad",
+   "categoria": "Plataformas",
+   "proveedor": "Thinkific",
+   "total": 48.89
+  },
+  {
+   "fecha": "2026-09-12",
+   "concepto": "ChatGPT mensual",
+   "categoria": "Inteligencia Artificial",
+   "proveedor": "OpenAI",
+   "total": 19.0
+  },
+  {
+   "fecha": "2026-09-12",
+   "concepto": "SmartLead mensual",
+   "categoria": "Marketing",
+   "proveedor": "SmartLead",
+   "total": 85.0
+  },
+  {
+   "fecha": "2026-09-13",
+   "concepto": "Reels semanales",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 27.0
+  },
+  {
+   "fecha": "2026-09-13",
+   "concepto": "Zoom ampliación",
+   "categoria": "Plataformas",
+   "proveedor": "Zoom",
+   "total": 40.98
+  },
+  {
+   "fecha": "2026-09-14",
+   "concepto": "Supabase mensual",
+   "categoria": "Software",
+   "proveedor": "Supabase",
+   "total": 21.7
+  },
+  {
+   "fecha": "2026-09-16",
+   "concepto": "Meta Verified Instagram",
+   "categoria": "Marketing",
+   "proveedor": "Meta",
+   "total": 16.99
+  },
+  {
+   "fecha": "2026-09-17",
+   "concepto": "Créditos IA",
+   "categoria": "Créditos IA",
+   "proveedor": "OpenRouter",
+   "total": 100.0
+  },
+  {
+   "fecha": "2026-09-17",
+   "concepto": "Discord mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Discord",
+   "total": 10.17
+  },
+  {
+   "fecha": "2026-09-17",
+   "concepto": "Calendly mensual",
+   "categoria": "Plataformas",
+   "proveedor": "Calendy",
+   "total": 12.0
+  },
+  {
+   "fecha": "2026-09-18",
+   "concepto": "Hostinger hosting mensual",
+   "categoria": "Hosting/Dominios",
+   "proveedor": "Hostinger",
+   "total": 17.49
+  },
+  {
+   "fecha": "2026-09-19",
+   "concepto": "Vercel mensual",
+   "categoria": "Software",
+   "proveedor": "Vercel",
+   "total": 24.52
+  },
+  {
+   "fecha": "2026-09-20",
+   "concepto": "Reels semanales",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 85.0
+  },
+  {
+   "fecha": "2026-09-26",
+   "concepto": "Cuota Mensual Mail y Web",
+   "categoria": "Hosting/Dominios",
+   "proveedor": "Ionos",
+   "total": 3.03
+  },
+  {
+   "fecha": "2026-09-27",
+   "concepto": "Reel Semanal",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 80.0
+  },
+  {
+   "fecha": "2026-09-27",
+   "concepto": "Manychat mensual",
+   "categoria": "Marketing",
+   "proveedor": "Manychat",
+   "total": 13.15
+  },
+  {
+   "fecha": "2026-10-01",
+   "concepto": "Salario Pablo",
+   "categoria": "Salarios",
+   "proveedor": "Pablo Torres",
+   "total": 175.0
+  },
+  {
+   "fecha": "2026-10-01",
+   "concepto": "Salario VA",
+   "categoria": "Salarios",
+   "proveedor": "Cristian Nugnes",
+   "total": 175.0
+  },
+  {
+   "fecha": "2026-10-04",
+   "concepto": "Comisión Sequra (factura del mes anterior)",
+   "categoria": "Comisión Sequra",
+   "proveedor": "Sequra",
+   "total": 119.76
+  },
+  {
+   "fecha": "2026-10-04",
+   "concepto": "Comisión Stripe (factura del mes anterior)",
+   "categoria": "Comisión Stripe",
+   "proveedor": "Stripe",
+   "total": 107.59
+  },
+  {
+   "fecha": "2026-10-04",
+   "concepto": "Reels semanales",
+   "categoria": "Editor/Contenido",
+   "proveedor": "Sebas Editor",
+   "total": 66.0
+  },
+  {
+   "fecha": "2026-10-04",
+   "concepto": "Traspaso a Bunq",
+   "categoria": "Créditos IA",
+   "proveedor": "OpenRouter",
+   "total": 50.0
+  },
+  {
+   "fecha": "2026-10-06",
+   "concepto": "Claude Max mensual",
+   "categoria": "Inteligencia Artificial",
+   "proveedor": "Claude",
+   "total": 180.0
+  },
+  {
+   "fecha": "2026-10-08",
+   "concepto": "Claude Max Mensual 2",
+   "categoria": "Inteligencia Artificial",
+   "proveedor": "Claude",
+   "total": 183.33
+  },
+  {
+   "fecha": "2026-10-09",
+   "concepto": "Traspaso a Bunq",
+   "categoria": "Créditos IA",
+   "proveedor": "OpenAI",
+   "total": 100.0
+  },
+  {
+   "fecha": "2026-10-10",
+   "concepto": "Thinkific",
+   "categoria": "Plataformas",
+   "proveedor": "Thinkific",
+   "total": 53.0
+  },
+  {
+   "fecha": "2026-10-10",
+   "concepto": "1 mes de FXreplay Backtesting",
+   "categoria": "Plataformas",
+   "proveedor": "FXreplay",
+   "total": 25.0
+  },
+  {
+   "fecha": "2026-10-12",
+   "concepto": "Cap mensual",
+   "categoria": "Software",
+   "proveedor": "CAP",
+   "total": 11.14
+  },
+  {
+   "fecha": "2026-10-12",
+   "concepto": "ChatGPT mensual",
+   "categoria": "Inteligencia Artificial",
+   "proveedor": "OpenAI",
+   "total": 19.33
+  }
+ ],
+ "caja": {
+  "disponible": 10979.71,
+  "pendienteCobro": 14855.5,
+  "cashLimpio": 75028.0,
+  "saldoCripto": 281.39,
+  "saldoBanco": 10698.32,
+  "pendienteRepartir": 25835.21
+ }
+}
